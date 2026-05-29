@@ -47,27 +47,24 @@ needs the `meta/worlds` desktop-editor SDK player API, whose exact names I can't
 confirm from public docs and can't typecheck locally. I won't guess and ship
 code that may not compile.
 
-**Pick one approach (I can implement A or C once you confirm the API/decision):**
+**CHOSEN APPROACH: A — Editor Player Settings (no code).**
 
 - **[ ] A. Editor Player Settings (no code).** In the desktop editor open the
-  world's Player Settings panel and look for avatar visibility + locomotion /
-  movement options; set avatar to hidden/none and disable locomotion. Doc:
+  world's Player Settings panel and set avatar to hidden/none and disable
+  locomotion / movement. Doc:
   `developers.meta.com/horizon-worlds/learn/documentation/desktop-editor/settings-modifications/player-settings-modification`
-  → tell me if these toggles exist in your editor version.
+  - If your editor version doesn't expose an avatar-hide or locomotion toggle,
+    tell me and we fall back to B or C.
 
-- **[ ] B. Avatar Pose Gizmo (v214+).** Place a pose gizmo that seats the player
-  with "allow exit" disabled, so the joystick can't move them; combine with
-  hiding the avatar. Mostly editor setup.
+Fallback options (only if A's toggles don't exist in your editor version):
+- **B. Avatar Pose Gizmo (v214+)** — seat the player with "allow exit" disabled
+  so the joystick can't move them; combine with hiding the avatar.
+- **C. Code via `meta/worlds` player API** — a small component on the player
+  entity that hides the avatar + zeroes locomotion on spawn. Would need the
+  exact `meta/worlds` API names for avatar scale/visibility and locomotion speed
+  (classic `horizon/core` equivalents: `player.avatarScale.set(0)`,
+  `player.locomotionSpeed.set(0)`, `PlayerControls.disableSystemControls()`).
 
-- **[ ] C. Code via meta/worlds player API.** I can write a small component on
-  the player entity (fold into `HexInputController`, already on `player.hstf`)
-  that on player spawn hides the avatar (e.g. avatar scale → 0) and zeroes
-  locomotion speed. **I need from you:** the exact API names available in your
-  editor's autocomplete under `meta/worlds` for: player avatar scale/visibility,
-  and locomotion speed / disabling movement. (Classic `horizon/core` used
-  `player.avatarScale.set(0)` and `player.locomotionSpeed.set(0)` + 
-  `PlayerControls.disableSystemControls()` — confirm the equivalents here.)
-
-**Note:** even with avatar hidden, the joystick widget itself may remain unless
-Focused Interaction or the Pose Gizmo is used. If a hidden avatar + fixed lobby
-camera is "good enough" visually for the prototype, that's the cheapest path.
+**Note:** even with the avatar hidden, the joystick widget may remain unless
+locomotion is actually disabled (Player Settings / Focused Interaction / Pose
+Gizmo). Verify in-editor that the joystick is gone on the home screen.

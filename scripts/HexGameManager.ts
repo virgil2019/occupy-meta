@@ -10,18 +10,16 @@
  * Players use @rpc to request builds.
  *
  * Integrates with GameStateComponent: only ticks when state is Playing.
- * Sends OccupyShowResultEvent when game ends.
+ * Match-end (result event + GameOver transition) is owned by OccupyCombatSystem.
  */
 
 import {
   Component,
-  EventService,
   ExecuteOn,
   NetworkingService,
   OnEntityStartEvent,
   OnWorldUpdateEvent,
   type OnWorldUpdateEventPayload,
-  Vec3,
   component,
   property,
   rpc,
@@ -58,12 +56,9 @@ import {
 
 import {
   GameState,
-  GameStateComponent,
   OnGameStateChanged,
   GameStateChangedPayload,
 } from './GameStateComponent';
-
-import {OccupyShowResultEvent, OccupyShowResultPayload} from './OccupyResultScreen';
 
 @component()
 export class HexGameManager extends Component {
@@ -115,7 +110,6 @@ export class HexGameManager extends Component {
   private mineCoinTimer: number = 0;
   private aiBaseCoinTimer: number = 0;
   private aiMineCoinTimer: number = 0;
-  private gameEnded: boolean = false;
 
   @subscribe(OnEntityStartEvent, {execution: ExecuteOn.Everywhere})
   onStart(): void {
@@ -132,7 +126,6 @@ export class HexGameManager extends Component {
 
     if (payload.lastState === GameState.MainMenu && payload.newState === GameState.Playing) {
       console.log('[HexGameManager] New game start - initializing');
-      this.gameEnded = false;
       this.initializeGameState();
     } else if (payload.newState === GameState.MainMenu) {
       // Returning to lobby - deactivate
@@ -247,13 +240,17 @@ export class HexGameManager extends Component {
 
     const dt = payload.deltaTime;
 
-    // Timer countdown
+    // Timer countdown. Match-end is owned solely by OccupyCombatSystem.tickWinCheck
+    // (it reads this.timer <= 0). We only count down and clamp here to avoid two
+    // systems racing to send the result event / set GameOver.
     this.timer -= dt;
     if (this.timer <= 0) {
       this.timer = 0;
-      this.endGame();
-      return;
     }
+
+    // Keep territory score live: combat captures tiles every tick, so recompute
+    // each frame (108 chars, cheap) instead of only on player builds.
+    this.recalculateScores();
 
     // Base coin production (both sides) - only if base is alive
     this.baseCoinTimer += dt;
@@ -274,31 +271,6 @@ export class HexGameManager extends Component {
     }
   }
 
-  private endGame(): void {
-    if (this.gameEnded) return;
-    this.gameEnded = true;
-    this.gameActive = false;
-
-    const won = this.playerScore > this.aiScore;
-    const isDraw = this.playerScore === this.aiScore;
-
-    console.log(`[HexGameManager] Game over! Player: ${this.playerScore}, AI: ${this.aiScore}, won=${won}, draw=${isDraw}`);
-
-    // Send result event globally so clients can show the result screen
-    EventService.sendGlobally(OccupyShowResultEvent, {
-      won,
-      isDraw,
-      playerScore: this.playerScore,
-      aiScore: this.aiScore,
-    });
-
-    // Transition game state to GameOver
-    const gs = GameStateComponent.instance;
-    if (gs) {
-      gs.setState(GameState.GameOver);
-    }
-  }
-
   private countBuildings(owner: Owner, buildingType: BuildingType): number {
     let count = 0;
     for (let i = 0; i < TOTAL_TILES; i++) {
@@ -313,42 +285,34 @@ export class HexGameManager extends Component {
 
   @rpc()
   RpcBuildOnTile(col: number, row: number): void {
-    if (!this.gameActive) {
-      console.log('[HexGameManager] Build rejected - game not active');
-      return;
-    }
+    this.buildForSide(Owner.Player, col, row);
+  }
 
-    if (col < 0 || col >= GRID_COLS || row < 0 || row >= GRID_ROWS) {
-      console.log('[HexGameManager] Build rejected - out of bounds');
-      return;
-    }
+  /**
+   * Validate + execute a build for either side. Shared by the player RPC and the
+   * AI driver (OccupyCombatSystem) so both go through one code path.
+   * Returns true if a building was placed.
+   */
+  buildForSide(side: Owner, col: number, row: number): boolean {
+    if (!this.gameActive) return false;
+    if (col < 0 || col >= GRID_COLS || row < 0 || row >= GRID_ROWS) return false;
 
     const idx = tileIndex(col, row);
 
-    if (this.tileOwnership[idx] !== Owner.Player) {
-      console.log('[HexGameManager] Build rejected - not player territory');
-      return;
-    }
+    if (this.tileOwnership[idx] !== side) return false;
+    if (this.tileBuildings[idx] !== BuildingType.None.toString()) return false;
 
-    if (this.tileBuildings[idx] !== BuildingType.None.toString()) {
-      console.log('[HexGameManager] Build rejected - already has building');
-      return;
-    }
-
-    if (this.playerExplored[idx] !== '1') {
-      console.log('[HexGameManager] Build rejected - not explored');
-      return;
-    }
+    const explored = side === Owner.Player ? this.playerExplored : this.aiExplored;
+    if (explored[idx] !== '1') return false;
 
     const tileChar = getTileType(col, row);
     const cost = tileChar === TileType.BaseNeighbor ? BUILD_COST_NEIGHBOR : BUILD_COST_NORMAL;
 
-    if (this.playerCoins < cost) {
-      console.log('[HexGameManager] Build rejected - not enough coins');
-      return;
-    }
+    const coins = side === Owner.Player ? this.playerCoins : this.aiCoins;
+    if (coins < cost) return false;
 
-    this.playerCoins -= cost;
+    if (side === Owner.Player) this.playerCoins -= cost;
+    else this.aiCoins -= cost;
 
     const buildingType = getBuildingTypeForTile(tileChar);
 
@@ -356,9 +320,15 @@ export class HexGameManager extends Component {
     buildingsArr[idx] = buildingType.toString();
     this.tileBuildings = buildingsArr.join('');
 
-    console.log(`[HexGameManager] Built ${BuildingType[buildingType]} at (${col}, ${row}), cost: ${cost}`);
+    console.log(`[HexGameManager] ${side} built ${BuildingType[buildingType]} at (${col}, ${row}), cost: ${cost}`);
 
-    this.playerExplored = this.computeExploration(Owner.Player, this.tileBuildings, this.tileOwnership);
+    // Reveal newly-adjacent tiles for the building side.
+    if (side === Owner.Player) {
+      this.playerExplored = this.computeExploration(Owner.Player, this.tileBuildings, this.tileOwnership);
+    } else {
+      this.aiExplored = this.computeExploration(Owner.AI, this.tileBuildings, this.tileOwnership);
+    }
     this.recalculateScores();
+    return true;
   }
 }

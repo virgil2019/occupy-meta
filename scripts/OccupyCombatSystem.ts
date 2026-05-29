@@ -28,8 +28,10 @@ import {
   STUCK_THRESHOLD_MS,
   TICK_MS,
   TOTAL_TILES,
+  TileType,
   UNIT_STATS,
   getNeighbors,
+  getTileType,
   hexDistance,
   indexToColRow,
   tileIndex,
@@ -65,6 +67,8 @@ interface CombatEntity {
   spawnedUnitType: string;
 }
 
+const AI_THINK_MS = 2000;
+
 function kindToIndex(kind: string): number {
   switch (kind) {
     case 'spearman': return 0;
@@ -89,6 +93,9 @@ export class OccupyCombatSystem extends Component {
   private needsInit: boolean = false;
   private gm: Maybe<HexGameManager> = null;
   private unitOnTile: Map<number, number> = new Map();
+  /** tileIndex → entityId for static buildings, so reconcile won't double-spawn. */
+  private buildingOnTile: Map<number, number> = new Map();
+  private aiThinkCdMs: number = AI_THINK_MS;
 
   @subscribe(OnEntityStartEvent, {execution: ExecuteOn.Everywhere})
   onStart(): void {
@@ -110,6 +117,7 @@ export class OccupyCombatSystem extends Component {
       this.needsInit = false;
       this.entities.clear();
       this.unitOnTile.clear();
+      this.buildingOnTile.clear();
       this.entityData = '[]';
     }
   }
@@ -117,12 +125,27 @@ export class OccupyCombatSystem extends Component {
   private initCombat(): void {
     this.entities.clear();
     this.unitOnTile.clear();
+    this.buildingOnTile.clear();
     this.nextEntityId = 1;
     this.tickAccumulatorMs = 0;
+    this.aiThinkCdMs = AI_THINK_MS;
+    this.reconcileBuildings();
+    this.syncEntityData();
+  }
+
+  /**
+   * Make the entity set match the authoritative tileBuildings string: for any
+   * tile that has a building but no combat entity yet, spawn one. This is what
+   * makes mid-game builds (player RPC AND AI) actually come alive — previously
+   * only buildings present at match start (the two bases) ever existed as
+   * entities, so player-built barracks/towers did nothing.
+   */
+  private reconcileBuildings(): void {
     if (!this.gm) return;
     for (let i = 0; i < TOTAL_TILES; i++) {
       const buildingChar = this.gm.tileBuildings[i];
       if (buildingChar === '0') continue;
+      if (this.buildingOnTile.has(i)) continue;
       const colRow = indexToColRow(i);
       const side = this.gm.tileOwnership[i] === Owner.Player ? Owner.Player : Owner.AI;
       let kind = '';
@@ -133,12 +156,12 @@ export class OccupyCombatSystem extends Component {
         case '4': kind = 'base'; break;
         default: continue;
       }
-      this.spawnEntity(kind, side, colRow.col, colRow.row);
+      const id = this.spawnEntity(kind, side, colRow.col, colRow.row);
+      this.buildingOnTile.set(i, id);
     }
-    this.syncEntityData();
   }
 
-  private spawnEntity(kind: string, side: string, col: number, row: number): void {
+  private spawnEntity(kind: string, side: string, col: number, row: number): number {
     const stats = UNIT_STATS[kind];
     const ent: CombatEntity = {
       id: this.nextEntityId++, kind: kind, side: side, col: col, row: row,
@@ -151,6 +174,7 @@ export class OccupyCombatSystem extends Component {
     };
     this.entities.set(ent.id, ent);
     if (stats.moveSpeed > 0) this.unitOnTile.set(tileIndex(col, row), ent.id);
+    return ent.id;
   }
 
   @subscribe(OnWorldUpdateEvent, {execution: ExecuteOn.Owner})
@@ -179,6 +203,9 @@ export class OccupyCombatSystem extends Component {
   }
 
   private processTick(): void {
+    // Bring newly-built tiles (player or AI) into the entity set first.
+    this.reconcileBuildings();
+    this.tickAi();
     this.tickBarracksSpawn();
     const ids: number[] = [];
     for (const k of this.entities.keys()) ids.push(k);
@@ -216,6 +243,79 @@ export class OccupyCombatSystem extends Component {
       }
       ent.produceCdMs = spawned ? BASE_BARRACKS_INTERVAL_MS / LEVEL_MULT[0] : 500;
     }
+  }
+
+  /**
+   * AI opponent. Ported (simplified) from the web prototype's sim/ai.ts decision
+   * tree. Runs every AI_THINK_MS of sim time. The original had a "build on a
+   * question tile" priority, but this map has no '?' tiles, so it's dropped.
+   * Builds go through the shared HexGameManager.buildForSide path.
+   */
+  private tickAi(): void {
+    if (!this.gm) return;
+    this.aiThinkCdMs -= TICK_MS;
+    if (this.aiThinkCdMs > 0) return;
+    this.aiThinkCdMs = AI_THINK_MS;
+
+    const aiBase = this.findBase(Owner.AI);
+    const playerBase = this.findBase(Owner.Player);
+    if (!aiBase || !playerBase) return;
+
+    const coin = this.gm.aiCoins;
+
+    // Priority 1 — Defense: player units pressing the AI base and no tower covering it.
+    if (coin >= 50 && this.playerUnitsNear(aiBase, 3) > 0 && !this.aiTowerNear(aiBase, 4)) {
+      const t = this.pickBuildableTile(TileType.Tower, aiBase);
+      if (t && this.gm.buildForSide(Owner.AI, t.col, t.row)) return;
+    }
+
+    // Priority 2 — Push: build toward the player base, prefer barracks, else anything.
+    if (coin >= 50) {
+      let t = this.pickBuildableTile(TileType.Barracks, playerBase);
+      if (!t) t = this.pickBuildableTile(null, playerBase);
+      if (t && this.gm.buildForSide(Owner.AI, t.col, t.row)) return;
+    }
+  }
+
+  private findBase(side: string): CombatEntity | null {
+    for (const ent of this.entities.values()) {
+      if (ent.kind === 'base' && ent.side === side && ent.hp > 0) return ent;
+    }
+    return null;
+  }
+
+  private playerUnitsNear(base: CombatEntity, d: number): number {
+    let n = 0;
+    for (const ent of this.entities.values()) {
+      if (ent.side === Owner.Player && ent.moveSpeed > 0 && ent.hp > 0 &&
+          hexDistance(ent.col, ent.row, base.col, base.row) <= d) n++;
+    }
+    return n;
+  }
+
+  private aiTowerNear(base: CombatEntity, d: number): boolean {
+    for (const ent of this.entities.values()) {
+      if (ent.side === Owner.AI && ent.kind === 'tower' && ent.hp > 0 &&
+          hexDistance(ent.col, ent.row, base.col, base.row) <= d) return true;
+    }
+    return false;
+  }
+
+  /** Nearest empty, explored AI tile (optionally of a given type) to `target`. */
+  private pickBuildableTile(type: TileType | null, target: CombatEntity): {col: number; row: number} | null {
+    if (!this.gm) return null;
+    let best: {col: number; row: number} | null = null;
+    let bestDist = Infinity;
+    for (let i = 0; i < TOTAL_TILES; i++) {
+      if (this.gm.tileOwnership[i] !== Owner.AI) continue;
+      if (this.gm.tileBuildings[i] !== '0') continue;
+      if (this.gm.aiExplored[i] !== '1') continue;
+      const {col, row} = indexToColRow(i);
+      if (type !== null && getTileType(col, row) !== type) continue;
+      const dist = hexDistance(col, row, target.col, target.row);
+      if (dist < bestDist) { bestDist = dist; best = {col, row}; }
+    }
+    return best;
   }
 
   private tickEntityBehavior(ent: CombatEntity): void {
@@ -309,6 +409,7 @@ export class OccupyCombatSystem extends Component {
         const arr = this.gm.tileBuildings.split('');
         arr[idx] = '0';
         this.gm.tileBuildings = arr.join('');
+        this.buildingOnTile.delete(idx);
       }
       this.entities.delete(dead[i]);
     }

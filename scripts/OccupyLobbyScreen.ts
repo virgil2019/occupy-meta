@@ -34,9 +34,9 @@ import {
 import {HexGameManager} from './HexGameManager';
 import {OccupyShowResultEvent, OccupyShowResultPayload} from './OccupyResultScreen';
 import {
-  CardId,
+  type CardId,
   MAX_LEVEL,
-  MetaState,
+  type MetaState,
   UPGRADE_COST,
   awardChest,
   claimChest,

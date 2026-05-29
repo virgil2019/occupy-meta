@@ -46,33 +46,25 @@ export class HexInputController extends Component {
   @subscribe(OnEntityStartEvent, {execution: ExecuteOn.Everywhere})
   onStart(): void {
     if (NetworkingService.get().isServerContext()) return;
-    // Do NOT enable FocusedInteraction here — it suppresses all UI touches
-    // including the lobby "Start Game" button. Wait until game state is Playing.
-    console.log('[HexInputController] Initialized, waiting for Playing state to enable input');
+    // Enable FocusedInteraction permanently from start. This suppresses the
+    // system joystick/avatar controls (which we never want in this tap-only game).
+    // Custom UI (Noesis panels like the lobby) still receives input since it's a
+    // separate input layer from "standard touch controls".
+    FocusedInteractionService.get().enableFocusedInteraction({
+      interactionStringId: 'occupy_hex_input',
+      disableFocusExitButton: true,
+      disableEmotesButton: true,
+    });
+    FocusedInteractionService.get().setTapVfxEnabled(false);
+    FocusedInteractionService.get().setTrailVfxEnabled(false);
+    console.log('[HexInputController] Focused interaction enabled permanently (tap-only game)');
   }
 
   @subscribe(OnGameStateChangedLocal, {execution: ExecuteOn.Everywhere})
   onGameStateChanged(payload: GameStateChangedLocalPayload): void {
     if (NetworkingService.get().isServerContext()) return;
     this.inputEnabled = payload.newState === GameState.Playing;
-    console.log(`[HexInputController] Input ${this.inputEnabled ? 'enabled' : 'disabled'}`);
-
-    if (this.inputEnabled) {
-      // Enable FocusedInteraction only during gameplay so lobby UI remains tappable.
-      // disableFocusExitButton: true prevents the brief "exit" icon (Issue 2).
-      FocusedInteractionService.get().enableFocusedInteraction({
-        interactionStringId: 'occupy_hex_input',
-        disableFocusExitButton: true,
-        disableEmotesButton: true,
-      });
-      FocusedInteractionService.get().setTapVfxEnabled(false);
-      FocusedInteractionService.get().setTrailVfxEnabled(false);
-      console.log('[HexInputController] Focused interaction enabled (Playing)');
-    } else {
-      // Disable FocusedInteraction so UI buttons work again (e.g., result screen).
-      FocusedInteractionService.get().disableFocusedInteraction();
-      console.log('[HexInputController] Focused interaction disabled (not Playing)');
-    }
+    console.log(`[HexInputController] Input ${this.inputEnabled ? 'enabled' : 'disabled'} (tap processing only)`);
   }
 
   @subscribe(OnFocusedInteractionInputEndedEvent, {execution: ExecuteOn.Everywhere})

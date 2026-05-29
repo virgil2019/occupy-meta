@@ -518,49 +518,6 @@
             "attributes": []
         },
         {
-            "id": "07b6108e-0f99-4664-9594-c531740a4218",
-            "name": "LobbyUI",
-            "components": [
-                {
-                    "data": {
-                        "class": "horizon::platform_api::TransformPlatformComponent",
-                        "version": 3,
-                        "data": {}
-                    },
-                    "dataType": "horizon::DataDefinitionAsset"
-                },
-                {
-                    "data": {
-                        "class": "horizon::platform_api::CustomUiPlatformComponent",
-                        "version": 16,
-                        "data": {
-                            "customUiType": "ScreenSpace",
-                            "xaml": {
-                                "packageOrRemoteId": "28344868928435269",
-                                "ingestionId": "8334912654747965186",
-                                "targetId": "2149638574"
-                            },
-                            "isInteractable": true
-                        }
-                    },
-                    "dataType": "horizon::DataDefinitionAsset"
-                },
-                {
-                    "data": {
-                        "class": "OccupyLobbyScreen",
-                        "definitionAsset": {
-                            "packageOrRemoteId": "28344868928435269",
-                            "ingestionId": "6882592060571973311",
-                            "targetId": "4237980480"
-                        },
-                        "data": {}
-                    },
-                    "dataType": "horizon::DataDefinitionAsset"
-                }
-            ],
-            "attributes": []
-        },
-        {
             "id": "0b3213e0-f0e4-440f-b8ec-a05e8092bad8",
             "name": "ResultUI",
             "components": [
@@ -595,6 +552,50 @@
                         "definitionAsset": {
                             "packageOrRemoteId": "28344868928435269",
                             "ingestionId": "3395337637053900190",
+                            "targetId": "4237980480"
+                        },
+                        "data": {}
+                    },
+                    "dataType": "horizon::DataDefinitionAsset"
+                }
+            ],
+            "attributes": []
+        },
+        {
+            "id": "f405ea45-11e8-4d54-9e37-df2c0089c910",
+            "name": "LobbyUI",
+            "components": [
+                {
+                    "data": {
+                        "class": "horizon::platform_api::TransformPlatformComponent",
+                        "version": 3,
+                        "data": {}
+                    },
+                    "dataType": "horizon::DataDefinitionAsset"
+                },
+                {
+                    "data": {
+                        "class": "horizon::platform_api::CustomUiPlatformComponent",
+                        "version": 16,
+                        "data": {
+                            "customUiType": "ScreenSpace",
+                            "xaml": {
+                                "packageOrRemoteId": "28344868928435269",
+                                "ingestionId": "8334912654747965186",
+                                "targetId": "2149638574"
+                            },
+                            "isInteractable": true,
+                            "isBlocking": true
+                        }
+                    },
+                    "dataType": "horizon::DataDefinitionAsset"
+                },
+                {
+                    "data": {
+                        "class": "OccupyLobbyScreen",
+                        "definitionAsset": {
+                            "packageOrRemoteId": "28344868928435269",
+                            "ingestionId": "6882592060571973311",
                             "targetId": "4237980480"
                         },
                         "data": {}
@@ -653,12 +654,12 @@
         },
         {
             "relationshipType": "RelationChildOf",
-            "source": "07b6108e-0f99-4664-9594-c531740a4218",
+            "source": "0b3213e0-f0e4-440f-b8ec-a05e8092bad8",
             "destination": "e0d85dda-a408-4143-aa44-71233e738128"
         },
         {
             "relationshipType": "RelationChildOf",
-            "source": "0b3213e0-f0e4-440f-b8ec-a05e8092bad8",
+            "source": "f405ea45-11e8-4d54-9e37-df2c0089c910",
             "destination": "e0d85dda-a408-4143-aa44-71233e738128"
         }
     ]

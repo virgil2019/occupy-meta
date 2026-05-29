@@ -1,0 +1,32 @@
+tasks:
+  - name: "Occupy Master - Full Port"
+    status: in_progress
+    reference: "占城大师 (抖音)"
+    subtasks:
+      - name: "Milestone: 3D Hex Board + Basic Interaction"
+        status: in_progress
+      - name: "Milestone: Core Combat Loop"
+        status: not_started
+      - name: "Milestone: AI + Question Tiles + Fog of War"
+        status: in_progress
+        subtasks:
+          - name: "Fog of War system"
+            status: done
+      - name: "Milestone: Post-Match Progression"
+        status: not_started
+
+done:
+  - UI Click Fix -- attached 4 missing components to space.hstf entities
+  - Board Invisible Fix -- fixed stale HexBoardRenderer definitionAsset in player.hstf
+  - Base Fix -- fixed marker pool race condition, both bases now render
+  - Cleanup -- disabled avatar and joystick via PlayerPlatformComponent
+
+chopping_block:
+  disabled_systems: []
+  temp_scaffolding: []
+  failed_attempts: []
+
+notes:
+  - Full design docs in occupy-master-main/docs/
+  - Sim is pure functional, tick-based (100ms)
+  - Mobile portrait orientation, top-down camera

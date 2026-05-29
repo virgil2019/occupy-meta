@@ -1,0 +1,19 @@
+{
+    "id": "28344868928435269",
+    "author": "george260522steam",
+    "name": "occupy",
+    "dependencies": [
+        {
+            "name": "meta/worlds_sdk",
+            "version": "*"
+        },
+        {
+            "name": "meta/editor_starter_kit",
+            "version": "1.14.5"
+        },
+        {
+            "name": "meta/assistant",
+            "version": "*"
+        }
+    ]
+}

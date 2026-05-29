@@ -1,0 +1,86 @@
+{
+    "version": 6,
+    "entities": [
+        {
+            "id": "a2270876-0b80-4c1f-8692-cbc2073cd8e5",
+            "name": "Player",
+            "type": {
+                "packageOrRemoteId": "24149709574657735",
+                "ingestionId": "8502139112299295806",
+                "targetId": "2719744159"
+            },
+            "deltas": [
+                {
+                    "sourceId": "ec859a24-a822-40de-a86c-817ae089c7b4",
+                    "components": [
+                        {
+                            "dataType": "horizon::DataDefinitionAsset",
+                            "data": {
+                                "class": "horizon::platform_api::PlayerPlatformComponent",
+                                "version": 14,
+                                "data": {
+                                    "translationEnabled": false,
+                                    "rotationEnabled": false,
+                                    "scale": 0.0
+                                }
+                            }
+                        },
+                        {
+                            "dataType": "horizon::DataDefinitionAsset",
+                            "data": {
+                                "class": "HexInputController",
+                                "definitionAsset": {
+                                    "packageOrRemoteId": "28344868928435269",
+                                    "ingestionId": "6026363343058773952",
+                                    "targetId": "4237980480"
+                                },
+                                "data": {}
+                            }
+                        },
+                        {
+                            "dataType": "horizon::DataDefinitionAsset",
+                            "data": {
+                                "class": "HexBoardRenderer",
+                                "definitionAsset": {
+                                    "packageOrRemoteId": "28344868928435269",
+                                    "ingestionId": "9185020429615936277",
+                                    "targetId": "4237980480"
+                                },
+                                "data": {
+                                    "tileTemplate": {
+                                        "packageOrRemoteId": "28344868928435269",
+                                        "ingestionId": "3073726851864965097",
+                                        "targetId": "2719744159"
+                                    },
+                                    "markerTemplate": {
+                                        "packageOrRemoteId": "28344868928435269",
+                                        "ingestionId": "12106965553820590849",
+                                        "targetId": "2719744159"
+                                    }
+                                }
+                            }
+                        }
+                    ],
+                    "attributes": []
+                },
+                {
+                    "sourceId": "989a5d78-6092-46ea-b633-751d7e31222e",
+                    "components": [],
+                    "attributes": [
+                        {
+                            "dataType": "horizon::EnabledEntityAttribute",
+                            "data": {
+                                "class": "horizon::EnabledEntityAttribute",
+                                "data": {
+                                    "isEnabled": false
+                                }
+                            }
+                        }
+                    ]
+                }
+            ],
+            "attributes": []
+        }
+    ],
+    "relationships": []
+}

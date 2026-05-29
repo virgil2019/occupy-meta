@@ -1,0 +1,50 @@
+{
+    "id": "f12d8c08-c423-435c-b6ae-234821100735",
+    "defaultTemplateAssetId": {
+        "packageOrRemoteId": "28344868928435269",
+        "ingestionId": "11335129147600607555",
+        "targetId": "2719744159"
+    },
+    "organizationId": "1214427811745936",
+    "organizationName": "george260522's team",
+    "organizationScope": "george260522steam",
+    "worldId": "1214621195059931",
+    "collisionLayers": [
+        "Player",
+        "World",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+    ],
+    "playerSettings": {
+        "screenOrientation": "Portrait"
+    },
+    "editorVersion": "173.0.0.10.104"
+}

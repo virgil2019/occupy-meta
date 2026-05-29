@@ -1,0 +1,6 @@
+{
+  "imports": [
+    "meta/editor_kit_shaders@materialMap.json"
+  ],
+  "entries": []
+}

@@ -1,0 +1,60 @@
+<Component xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+           xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+           xmlns:noesis="clr-namespace:NoesisGUIExtensions"
+           xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+           xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+           mc:Ignorable="d">
+  <noesis:LayoutScaler ReferenceResolution="1080,1920">
+    <!-- Semi-transparent overlay -->
+    <Grid Background="#CC000000"/>
+
+    <Grid x:Name="ContentContainer" Margin="48,240,48,120">
+      <!-- System reserved zones -->
+      <Grid Width="220" Height="100" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+      <Grid Width="220" Height="100" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+
+      <!-- Result panel centered -->
+      <Border CornerRadius="20" Padding="40,60" HorizontalAlignment="Center"
+              VerticalAlignment="Center" MinWidth="500">
+        <Border.Background>
+          <LinearGradientBrush StartPoint="0.5,0" EndPoint="0.5,1">
+            <GradientStop Color="#FF1E2A4A" Offset="0"/>
+            <GradientStop Color="#FF0F1525" Offset="1"/>
+          </LinearGradientBrush>
+        </Border.Background>
+        <StackPanel HorizontalAlignment="Center">
+          <!-- Title (Victory/Defeat/Draw) -->
+          <TextBlock Text="{Binding Path=resultTitle}" FontSize="42" FontWeight="Bold"
+                     HorizontalAlignment="Center" Margin="0,0,0,20"
+                     Foreground="{Binding Path=resultColor}"/>
+
+          <!-- Score display -->
+          <TextBlock Text="{Binding Path=scoreDisplay}" Foreground="#FFCCCCCC" FontSize="20"
+                     HorizontalAlignment="Center" Margin="0,0,0,8"/>
+
+          <!-- Territory info -->
+          <TextBlock Text="{Binding Path=territoryDisplay}" Foreground="#FF999999" FontSize="16"
+                     HorizontalAlignment="Center" Margin="0,0,0,30"/>
+
+          <!-- Return to lobby button -->
+          <Button Command="{Binding Path=events.onReturnToLobby}" Margin="0">
+            <Button.Template>
+              <ControlTemplate TargetType="Button">
+                <Border CornerRadius="16" Padding="40,14">
+                  <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                      <GradientStop Color="#FF4488FF" Offset="0"/>
+                      <GradientStop Color="#FF2266DD" Offset="1"/>
+                    </LinearGradientBrush>
+                  </Border.Background>
+                  <TextBlock Text="Return to Lobby" Foreground="#FFFFFFFF"
+                             FontSize="22" FontWeight="Bold" HorizontalAlignment="Center"/>
+                </Border>
+              </ControlTemplate>
+            </Button.Template>
+          </Button>
+        </StackPanel>
+      </Border>
+    </Grid>
+  </noesis:LayoutScaler>
+</Component>

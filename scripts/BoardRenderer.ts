@@ -122,13 +122,37 @@ export class HexBoardRenderer extends Component {
     console.log('[HexBoardRenderer] Starting');
     this.tileEntities = new Array(TOTAL_TILES).fill(null);
     this.tileColors = new Array(TOTAL_TILES).fill(null);
+    // Pre-spawn the board now (hidden) while the world is still loading, so
+    // entering a match reveals it instantly and the lobby never shows a board.
+    // Visibility is driven entirely by game state (see setBoardVisible).
+    this.beginStaggeredSpawn();
   }
 
   @subscribe(OnGameStateChangedLocal, {execution: ExecuteOn.Everywhere})
   onGameStateChanged(payload: GameStateChangedLocalPayload): void {
     if (NetworkingService.get().isServerContext()) return;
-    if (payload.newState === GameState.Playing && !this.tilesSpawned && !this.isSpawning) {
-      this.beginStaggeredSpawn();
+    // Show the board during a match and on the result screen; hide it in the lobby
+    // so the home screen doesn't see through to the 3D board / unit markers.
+    const show = payload.newState === GameState.Playing || payload.newState === GameState.GameOver;
+    this.boardVisible = show;
+    this.setBoardVisible(show);
+  }
+
+  /** Toggle visibility of all spawned tiles + markers (board is pre-spawned hidden). */
+  private setBoardVisible(visible: boolean): void {
+    if (visible) {
+      // Force the marker layer to re-render on the next update tick.
+      this.lastEntityData = '[]';
+    }
+    for (let i = 0; i < this.tileEntities.length; i++) {
+      const t = this.tileEntities[i];
+      if (t) t.enabledSelf = visible;
+    }
+    if (!visible) {
+      for (let i = 0; i < this.markerPool.length; i++) {
+        if (this.markerPool[i]) this.markerPool[i].enabledSelf = false;
+      }
+      this.markersActive = 0;
     }
   }
 
@@ -168,8 +192,8 @@ export class HexBoardRenderer extends Component {
       return;
     }
 
-    // Phase 3: Update tile colors and entity markers
-    if (this.tilesSpawned) {
+    // Phase 3: Update tile colors and entity markers (only while the board is shown)
+    if (this.tilesSpawned && this.boardVisible) {
       this.updateTileColors();
       this.updateEntityMarkers();
     }
@@ -190,6 +214,8 @@ export class HexBoardRenderer extends Component {
         scale: TILE_SCALE,
       }).then((ent: Entity) => {
         this.tileEntities[i] = ent;
+        // Respect current visibility — tiles may resolve after the match starts.
+        ent.enabledSelf = this.boardVisible;
         const children = ent.getChildren();
         for (const child of children) {
           const color = child.getComponent(ColorComponent);

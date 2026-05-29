@@ -38,6 +38,7 @@ import {
   GAME_DURATION,
   GRID_COLS,
   GRID_ROWS,
+  LEVEL_MULT,
   MINE_COIN_INTERVAL,
   MINE_COIN_RATE,
   Owner,
@@ -269,7 +270,9 @@ export class HexGameManager extends Component {
       this.mineCoinTimer -= MINE_COIN_INTERVAL;
       const playerMines = this.countBuildings(Owner.Player, BuildingType.Mine);
       const aiMines = this.countBuildings(Owner.AI, BuildingType.Mine);
-      this.playerCoins += playerMines * MINE_COIN_RATE;
+      // Player mine income scales with the Mine card level (AI fixed at Lv1).
+      const mineMult = LEVEL_MULT[this.getPlayerCardLevel('mine') - 1] ?? 1.0;
+      this.playerCoins += Math.round(playerMines * MINE_COIN_RATE * mineMult);
       this.aiCoins += aiMines * MINE_COIN_RATE;
     }
   }

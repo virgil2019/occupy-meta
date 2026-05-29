@@ -64,11 +64,17 @@
                          HorizontalAlignment="Center" Margin="0,4,0,2"/>
               <TextBlock Text="{Binding Path=card1Shards}" Foreground="#FF888888" FontSize="13"
                          HorizontalAlignment="Center"/>
-              <Border CornerRadius="8" Padding="12,6" Margin="0,6,0,0"
-                      Background="#FF334488" HorizontalAlignment="Center">
-                <TextBlock Text="Upgrade" Foreground="#FFCCDDFF" FontSize="13"
-                           HorizontalAlignment="Center"/>
-              </Border>
+              <Button Command="{Binding Path=events.onUpgradeCard1}" Margin="0,6,0,0"
+                      HorizontalAlignment="Center">
+                <Button.Template>
+                  <ControlTemplate TargetType="Button">
+                    <Border CornerRadius="8" Padding="12,6" Background="#FF334488">
+                      <TextBlock Text="Upgrade" Foreground="#FFCCDDFF" FontSize="13"
+                                 HorizontalAlignment="Center"/>
+                    </Border>
+                  </ControlTemplate>
+                </Button.Template>
+              </Button>
             </StackPanel>
           </Border>
 
@@ -89,11 +95,17 @@
                          HorizontalAlignment="Center" Margin="0,4,0,2"/>
               <TextBlock Text="{Binding Path=card2Shards}" Foreground="#FF888888" FontSize="13"
                          HorizontalAlignment="Center"/>
-              <Border CornerRadius="8" Padding="12,6" Margin="0,6,0,0"
-                      Background="#FF338844" HorizontalAlignment="Center">
-                <TextBlock Text="Upgrade" Foreground="#FFCCFFDD" FontSize="13"
-                           HorizontalAlignment="Center"/>
-              </Border>
+              <Button Command="{Binding Path=events.onUpgradeCard2}" Margin="0,6,0,0"
+                      HorizontalAlignment="Center">
+                <Button.Template>
+                  <ControlTemplate TargetType="Button">
+                    <Border CornerRadius="8" Padding="12,6" Background="#FF338844">
+                      <TextBlock Text="Upgrade" Foreground="#FFCCFFDD" FontSize="13"
+                                 HorizontalAlignment="Center"/>
+                    </Border>
+                  </ControlTemplate>
+                </Button.Template>
+              </Button>
             </StackPanel>
           </Border>
 
@@ -114,11 +126,17 @@
                          HorizontalAlignment="Center" Margin="0,4,0,2"/>
               <TextBlock Text="{Binding Path=card3Shards}" Foreground="#FF888888" FontSize="13"
                          HorizontalAlignment="Center"/>
-              <Border CornerRadius="8" Padding="12,6" Margin="0,6,0,0"
-                      Background="#FF885533" HorizontalAlignment="Center">
-                <TextBlock Text="Upgrade" Foreground="#FFFFEECC" FontSize="13"
-                           HorizontalAlignment="Center"/>
-              </Border>
+              <Button Command="{Binding Path=events.onUpgradeCard3}" Margin="0,6,0,0"
+                      HorizontalAlignment="Center">
+                <Button.Template>
+                  <ControlTemplate TargetType="Button">
+                    <Border CornerRadius="8" Padding="12,6" Background="#FF885533">
+                      <TextBlock Text="Upgrade" Foreground="#FFFFEECC" FontSize="13"
+                                 HorizontalAlignment="Center"/>
+                    </Border>
+                  </ControlTemplate>
+                </Button.Template>
+              </Button>
             </StackPanel>
           </Border>
 
@@ -139,37 +157,67 @@
                          HorizontalAlignment="Center" Margin="0,4,0,2"/>
               <TextBlock Text="{Binding Path=card4Shards}" Foreground="#FF888888" FontSize="13"
                          HorizontalAlignment="Center"/>
-              <Border CornerRadius="8" Padding="12,6" Margin="0,6,0,0"
-                      Background="#FF888833" HorizontalAlignment="Center">
-                <TextBlock Text="Upgrade" Foreground="#FFFFFFEE" FontSize="13"
-                           HorizontalAlignment="Center"/>
-              </Border>
+              <Button Command="{Binding Path=events.onUpgradeCard4}" Margin="0,6,0,0"
+                      HorizontalAlignment="Center">
+                <Button.Template>
+                  <ControlTemplate TargetType="Button">
+                    <Border CornerRadius="8" Padding="12,6" Background="#FF888833">
+                      <TextBlock Text="Upgrade" Foreground="#FFFFFFEE" FontSize="13"
+                                 HorizontalAlignment="Center"/>
+                    </Border>
+                  </ControlTemplate>
+                </Button.Template>
+              </Button>
             </StackPanel>
           </Border>
         </UniformGrid>
 
         <!-- CHEST SLOTS -->
         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,10">
-          <Border CornerRadius="8" Width="80" Height="80" Margin="6" Background="#FF2A2A4E">
-            <TextBlock Text="{Binding Path=chest1Text}" Foreground="#FFAAAAAA" FontSize="12"
-                       HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
-                       TextAlignment="Center"/>
-          </Border>
-          <Border CornerRadius="8" Width="80" Height="80" Margin="6" Background="#FF2A2A4E">
-            <TextBlock Text="{Binding Path=chest2Text}" Foreground="#FFAAAAAA" FontSize="12"
-                       HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
-                       TextAlignment="Center"/>
-          </Border>
-          <Border CornerRadius="8" Width="80" Height="80" Margin="6" Background="#FF2A2A4E">
-            <TextBlock Text="{Binding Path=chest3Text}" Foreground="#FFAAAAAA" FontSize="12"
-                       HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
-                       TextAlignment="Center"/>
-          </Border>
-          <Border CornerRadius="8" Width="80" Height="80" Margin="6" Background="#FF2A2A4E">
-            <TextBlock Text="{Binding Path=chest4Text}" Foreground="#FFAAAAAA" FontSize="12"
-                       HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
-                       TextAlignment="Center"/>
-          </Border>
+          <Button Command="{Binding Path=events.onChest1}" Margin="6">
+            <Button.Template>
+              <ControlTemplate TargetType="Button">
+                <Border CornerRadius="8" Width="80" Height="80" Background="#FF2A2A4E">
+                  <TextBlock Text="{Binding Path=chest1Text}" Foreground="#FFAAAAAA" FontSize="12"
+                             HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
+                             TextAlignment="Center"/>
+                </Border>
+              </ControlTemplate>
+            </Button.Template>
+          </Button>
+          <Button Command="{Binding Path=events.onChest2}" Margin="6">
+            <Button.Template>
+              <ControlTemplate TargetType="Button">
+                <Border CornerRadius="8" Width="80" Height="80" Background="#FF2A2A4E">
+                  <TextBlock Text="{Binding Path=chest2Text}" Foreground="#FFAAAAAA" FontSize="12"
+                             HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
+                             TextAlignment="Center"/>
+                </Border>
+              </ControlTemplate>
+            </Button.Template>
+          </Button>
+          <Button Command="{Binding Path=events.onChest3}" Margin="6">
+            <Button.Template>
+              <ControlTemplate TargetType="Button">
+                <Border CornerRadius="8" Width="80" Height="80" Background="#FF2A2A4E">
+                  <TextBlock Text="{Binding Path=chest3Text}" Foreground="#FFAAAAAA" FontSize="12"
+                             HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
+                             TextAlignment="Center"/>
+                </Border>
+              </ControlTemplate>
+            </Button.Template>
+          </Button>
+          <Button Command="{Binding Path=events.onChest4}" Margin="6">
+            <Button.Template>
+              <ControlTemplate TargetType="Button">
+                <Border CornerRadius="8" Width="80" Height="80" Background="#FF2A2A4E">
+                  <TextBlock Text="{Binding Path=chest4Text}" Foreground="#FFAAAAAA" FontSize="12"
+                             HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap"
+                             TextAlignment="Center"/>
+                </Border>
+              </ControlTemplate>
+            </Button.Template>
+          </Button>
         </StackPanel>
 
         <!-- WIN RATE + START BUTTON -->

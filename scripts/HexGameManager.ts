@@ -110,6 +110,9 @@ export class HexGameManager extends Component {
   private mineCoinTimer: number = 0;
   private aiBaseCoinTimer: number = 0;
   private aiMineCoinTimer: number = 0;
+  /** Player card levels (1..4), pushed from the lobby via RpcSetCardLevels just
+   *  before Start. Combat scales player unit hp/atk by these. AI stays Lv1. */
+  private playerCardLevels: Record<string, number> = {spearman: 1, archer: 1, tower: 1, mine: 1};
 
   @subscribe(OnEntityStartEvent, {execution: ExecuteOn.Everywhere})
   onStart(): void {
@@ -286,6 +289,18 @@ export class HexGameManager extends Component {
   @rpc()
   RpcBuildOnTile(col: number, row: number): void {
     this.buildForSide(Owner.Player, col, row);
+  }
+
+  /** Lobby pushes the player's card levels here right before the match starts. */
+  @rpc()
+  RpcSetCardLevels(spearman: number, archer: number, tower: number, mine: number): void {
+    this.playerCardLevels = {spearman, archer, tower, mine};
+    console.log(`[HexGameManager] Card levels set: S${spearman} A${archer} T${tower} M${mine}`);
+  }
+
+  /** Player card level (1..4) for a unit/building kind; 1 for kinds without a card. */
+  getPlayerCardLevel(kind: string): number {
+    return this.playerCardLevels[kind] ?? 1;
   }
 
   /**

@@ -163,9 +163,17 @@ export class OccupyCombatSystem extends Component {
 
   private spawnEntity(kind: string, side: string, col: number, row: number): number {
     const stats = UNIT_STATS[kind];
+    // Player units/buildings scale with their card level; AI is fixed at Lv1.
+    let hp = stats.hp;
+    let atk = stats.atk;
+    if (side === Owner.Player && this.gm) {
+      const mult = LEVEL_MULT[this.gm.getPlayerCardLevel(kind) - 1] ?? 1.0;
+      hp = Math.round(hp * mult);
+      atk = Math.round(atk * mult);
+    }
     const ent: CombatEntity = {
       id: this.nextEntityId++, kind: kind, side: side, col: col, row: row,
-      hp: stats.hp, hpMax: stats.hp, atk: stats.atk, range: stats.range,
+      hp: hp, hpMax: hp, atk: atk, range: stats.range,
       moveSpeed: stats.moveSpeed, attackSpeed: stats.attackSpeed,
       moveCdMs: 0, atkCdMs: 0, stuckMs: 0,
       blacklistedTargetId: 0, blacklistMs: 0,
@@ -269,7 +277,14 @@ export class OccupyCombatSystem extends Component {
       if (t && this.gm.buildForSide(Owner.AI, t.col, t.row)) return;
     }
 
-    // Priority 2 — Push: build toward the player base, prefer barracks, else anything.
+    // Priority 2 — Economy: keep a couple of mines running so the AI isn't
+    // starved on base income alone. Build mines near the AI base.
+    if (coin >= 50 && this.aiBuildingCount(BuildingType.Mine) < 3) {
+      const m = this.pickBuildableTile(TileType.Mine, aiBase);
+      if (m && this.gm.buildForSide(Owner.AI, m.col, m.row)) return;
+    }
+
+    // Priority 3 — Push: build toward the player base, prefer barracks, else anything.
     if (coin >= 50) {
       let t = this.pickBuildableTile(TileType.Barracks, playerBase);
       if (!t) t = this.pickBuildableTile(null, playerBase);
@@ -289,6 +304,16 @@ export class OccupyCombatSystem extends Component {
     for (const ent of this.entities.values()) {
       if (ent.side === Owner.Player && ent.moveSpeed > 0 && ent.hp > 0 &&
           hexDistance(ent.col, ent.row, base.col, base.row) <= d) n++;
+    }
+    return n;
+  }
+
+  private aiBuildingCount(buildingType: BuildingType): number {
+    if (!this.gm) return 0;
+    const ch = buildingType.toString();
+    let n = 0;
+    for (let i = 0; i < TOTAL_TILES; i++) {
+      if (this.gm.tileOwnership[i] === Owner.AI && this.gm.tileBuildings[i] === ch) n++;
     }
     return n;
   }

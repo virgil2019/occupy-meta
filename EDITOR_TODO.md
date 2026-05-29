@@ -10,8 +10,17 @@ Code changes on branch `fix/core-gameplay-and-ui-lifecycle` rely on these.
 ---
 
 ## Script sync
-- [ ] After pulling this branch, open the project in Horizon Studio so it re-transpiles the edited scripts (`HexGameManager.ts`, `OccupyCombatSystem.ts`, `BoardRenderer.ts`). No new components were added, so no new attachments are required.
+- [ ] After pulling this branch, open the project in Horizon Studio so it re-transpiles the edited/new scripts (`HexGameManager.ts`, `OccupyCombatSystem.ts`, `BoardRenderer.ts`, `OccupyLobbyScreen.ts`, and the new `progression.ts`). No new components were added, so no new attachments are required.
 - [ ] Confirm the `HexBoardRenderer` component (on the player entity) still has its `tileTemplate` and `markerTemplate` properties assigned. The board is now pre-spawned at component start, so if these bindings are empty the board won't appear at all (log: `No tileTemplate assigned - cannot spawn tiles`).
+- [ ] `progression.ts` is a plain module (no component) — it just needs to exist in the scripts folder so `OccupyLobbyScreen` can import it. No attachment.
+
+## Meta UI — XAML binding to verify (`ui/OccupyLobby.xaml`)
+The 4 "Upgrade" buttons and 4 chest slots were changed from static `Border`s into
+`Button`s bound to `events.onUpgradeCard1..4` / `events.onChest1..4`. The chest
+`TextBlock` text binds (`{Binding Path=chestNText}`) **inside a Button
+ControlTemplate**.
+- [ ] Verify the chest slots still show their text (Empty / countdown / "Ready!") after templating. If they render blank, the in-template `DataContext` isn't inheriting — tell me and I'll switch those to `Button.Content` + a `ContentPresenter` template instead.
+- [ ] Verify tapping Upgrade / chest buttons fires (watch console: `Upgraded ...`, `Claimed chest ...`).
 
 ## Verification checklist (run one match in Studio)
 - [ ] Build a barracks on a player tile → it spawns units within ~5s (mid-game builds now work).
@@ -22,6 +31,10 @@ Code changes on branch `fix/core-gameplay-and-ui-lifecycle` rely on these.
 - [ ] Lobby/home screen shows NO 3D board or unit markers behind it (before first match AND after returning from a match).
 - [ ] Pressing "Start" shows the board near-instantly (no long spawn delay).
 - [ ] In lobby (and during a match) there is no movement joystick / first-person avatar control; input is tap-only.
+- [ ] Card upgrades work: tap Upgrade → level rises, gold/shards drop (starts at 5000 gold, 200 shards/card so it's immediately testable).
+- [ ] Card level affects the match: upgrade e.g. Spearman to Lv4, start a match, your spearmen are visibly tankier/stronger than the AI's. (AI is fixed Lv1 by design.)
+- [ ] Chest loop: after a match a chest appears → tap to start its 10-min countdown → (it won't finish quickly; to sanity-check the "ready/claim" path you can temporarily lower `CHEST_DURATION_MS` in `progression.ts`).
+- [ ] Meta is session-only by design — gold/levels/chests reset when the world reloads. (Persistence was deferred.)
 
 ---
 

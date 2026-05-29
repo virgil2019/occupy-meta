@@ -10,7 +10,8 @@ Code changes on branch `fix/core-gameplay-and-ui-lifecycle` rely on these.
 ---
 
 ## Script sync
-- [ ] After pulling this branch, open the project in Horizon Studio so it re-transpiles the edited scripts (`HexGameManager.ts`, `OccupyCombatSystem.ts`, `BoardRenderer.ts`, `HexInputController.ts`). No new components were added, so no new attachments are required (see notes below if that changes).
+- [ ] After pulling this branch, open the project in Horizon Studio so it re-transpiles the edited scripts (`HexGameManager.ts`, `OccupyCombatSystem.ts`, `BoardRenderer.ts`). No new components were added, so no new attachments are required.
+- [ ] Confirm the `HexBoardRenderer` component (on the player entity) still has its `tileTemplate` and `markerTemplate` properties assigned. The board is now pre-spawned at component start, so if these bindings are empty the board won't appear at all (log: `No tileTemplate assigned - cannot spawn tiles`).
 
 ## Verification checklist (run one match in Studio)
 - [ ] Build a barracks on a player tile → it spawns units within ~5s (mid-game builds now work).

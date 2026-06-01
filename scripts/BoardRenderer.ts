@@ -169,8 +169,7 @@ export class HexBoardRenderer extends Component {
   private tileTexts: (WorldTextComponent | null)[] = [];
   private tileTextEntities: (Entity | null)[] = [];
   private tilesTextReady: boolean = false;
-  private lastOwnershipStr: string = '';
-  private lastExploredStr: string = '';
+  private lastTileTextKey: string = '';
   private tileTextSpawnIndex: number = 0;
 
   /**
@@ -253,8 +252,7 @@ export class HexBoardRenderer extends Component {
     }
     if (visible) {
       this.lastBuildingsStr = '';
-      this.lastOwnershipStr = '';
-      this.lastExploredStr = '';
+      this.lastTileTextKey = '';
     }
   }
 
@@ -588,10 +586,12 @@ export class HexBoardRenderer extends Component {
     const tileTypes = this.gameManager.tileTypes;
     if (!ownership || !explored || !buildings || !tileTypes) return;
 
-    const cacheKey = ownership + explored + buildings;
-    if (cacheKey === this.lastOwnershipStr + this.lastExploredStr) return;
-    this.lastOwnershipStr = ownership;
-    this.lastExploredStr = explored;
+    // Must include tileTypes: the empty-tile branch renders from it (e.g. a
+    // Mystery tile resolving '?' -> 'E' changes nothing else), so omitting it
+    // would cache-suppress that label refresh once the cache actually hits.
+    const cacheKey = ownership + explored + buildings + tileTypes;
+    if (cacheKey === this.lastTileTextKey) return;
+    this.lastTileTextKey = cacheKey;
 
     for (let i = 0; i < TOTAL_TILES; i++) {
       const textComp = this.tileTexts[i];

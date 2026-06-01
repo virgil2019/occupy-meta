@@ -2,8 +2,8 @@
     "version": 6,
     "entities": [
         {
-            "id": "cd750133-16e0-4f86-a332-1e45d3b3d98b",
-            "name": "HexTile",
+            "id": "fdda5743-fb4c-4142-9b8b-0d4ebc6ec414",
+            "name": "OccupySoldier",
             "components": [
                 {
                     "data": {
@@ -51,7 +51,7 @@
             ]
         },
         {
-            "id": "449e714d-695f-436c-8753-c144a63a42c2",
+            "id": "c227f1fe-23c7-49ad-93ab-5e1d7cff773c",
             "name": "Visuals",
             "components": [
                 {
@@ -69,7 +69,7 @@
                         "data": {
                             "mesh": {
                                 "packageOrRemoteId": "28344868928435269",
-                                "ingestionId": "16699898481029707768",
+                                "ingestionId": "10259997973642780840",
                                 "targetId": "481548839"
                             },
                             "shadowParams": {
@@ -87,16 +87,15 @@
                         "class": "horizon::platform_api::MaterialPlatformComponent",
                         "version": 2,
                         "data": {
+                            "materials": [
+                                {
+                                    "packageOrRemoteId": "28344868928435269",
+                                    "ingestionId": "306156244669682489",
+                                    "targetId": "157013062"
+                                }
+                            ],
                             "perPartInstancedConstantParameterLists": []
                         }
-                    },
-                    "dataType": "horizon::DataDefinitionAsset"
-                },
-                {
-                    "data": {
-                        "class": "horizon::platform_api::ColorPlatformComponent",
-                        "version": 2,
-                        "data": {}
                     },
                     "dataType": "horizon::DataDefinitionAsset"
                 }
@@ -104,7 +103,7 @@
             "attributes": []
         },
         {
-            "id": "d3d6169c-7e4a-4a92-bfab-3e1d4ba4d2f8",
+            "id": "3bf5e80d-1b6f-4030-a152-eccfc1ccfdc0",
             "name": "Collider",
             "components": [
                 {
@@ -130,13 +129,13 @@
     "relationships": [
         {
             "relationshipType": "RelationChildOf",
-            "source": "449e714d-695f-436c-8753-c144a63a42c2",
-            "destination": "cd750133-16e0-4f86-a332-1e45d3b3d98b"
+            "source": "c227f1fe-23c7-49ad-93ab-5e1d7cff773c",
+            "destination": "fdda5743-fb4c-4142-9b8b-0d4ebc6ec414"
         },
         {
             "relationshipType": "RelationChildOf",
-            "source": "d3d6169c-7e4a-4a92-bfab-3e1d4ba4d2f8",
-            "destination": "cd750133-16e0-4f86-a332-1e45d3b3d98b"
+            "source": "3bf5e80d-1b6f-4030-a152-eccfc1ccfdc0",
+            "destination": "fdda5743-fb4c-4142-9b8b-0d4ebc6ec414"
         }
     ]
 }

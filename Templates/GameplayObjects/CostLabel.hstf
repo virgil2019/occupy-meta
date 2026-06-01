@@ -1,0 +1,31 @@
+{
+    "version": 6,
+    "entities": [
+        {
+            "id": "f7ef1c35-6ab5-490e-bd38-5a44078ef374",
+            "name": "Root",
+            "components": [
+                {
+                    "data": {
+                        "class": "horizon::platform_api::WorldTextPlatformComponent",
+                        "version": 3,
+                        "data": {
+                            "text": "50",
+                            "color": {
+                                "r": 1.0,
+                                "g": 0.8500000238418579,
+                                "b": 0.0,
+                                "a": 1.0
+                            },
+                            "fontSize": 24.0,
+                            "outlineWidth": 0.20000000298023225
+                        }
+                    },
+                    "dataType": "horizon::DataDefinitionAsset"
+                }
+            ],
+            "attributes": []
+        }
+    ],
+    "relationships": []
+}

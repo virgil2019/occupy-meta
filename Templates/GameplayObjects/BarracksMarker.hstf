@@ -2,8 +2,8 @@
     "version": 6,
     "entities": [
         {
-            "id": "cd750133-16e0-4f86-a332-1e45d3b3d98b",
-            "name": "HexTile",
+            "id": "4d51541c-435b-44c7-9eb5-bd941956222d",
+            "name": "BarracksMarker",
             "components": [
                 {
                     "data": {
@@ -34,7 +34,7 @@
                         "class": "horizon::platform_api::PhysicsBodyPlatformComponent",
                         "version": 9,
                         "data": {
-                            "type": "StaticCollision",
+                            "type": "Trigger",
                             "useGravity": false
                         }
                     },
@@ -51,7 +51,7 @@
             ]
         },
         {
-            "id": "449e714d-695f-436c-8753-c144a63a42c2",
+            "id": "714b4e54-a3e4-4149-b76b-6eb84741bf4e",
             "name": "Visuals",
             "components": [
                 {
@@ -69,8 +69,8 @@
                         "data": {
                             "mesh": {
                                 "packageOrRemoteId": "28344868928435269",
-                                "ingestionId": "16699898481029707768",
-                                "targetId": "481548839"
+                                "ingestionId": "3669625531283791605",
+                                "targetId": "2007718928"
                             },
                             "shadowParams": {
                                 "class": "horizon::platform_api::ShadowParams",
@@ -104,7 +104,7 @@
             "attributes": []
         },
         {
-            "id": "d3d6169c-7e4a-4a92-bfab-3e1d4ba4d2f8",
+            "id": "fbf908f0-d6aa-45b2-b0b9-f9754dd6d790",
             "name": "Collider",
             "components": [
                 {
@@ -130,13 +130,13 @@
     "relationships": [
         {
             "relationshipType": "RelationChildOf",
-            "source": "449e714d-695f-436c-8753-c144a63a42c2",
-            "destination": "cd750133-16e0-4f86-a332-1e45d3b3d98b"
+            "source": "714b4e54-a3e4-4149-b76b-6eb84741bf4e",
+            "destination": "4d51541c-435b-44c7-9eb5-bd941956222d"
         },
         {
             "relationshipType": "RelationChildOf",
-            "source": "d3d6169c-7e4a-4a92-bfab-3e1d4ba4d2f8",
-            "destination": "cd750133-16e0-4f86-a332-1e45d3b3d98b"
+            "source": "fbf908f0-d6aa-45b2-b0b9-f9754dd6d790",
+            "destination": "4d51541c-435b-44c7-9eb5-bd941956222d"
         }
     ]
 }

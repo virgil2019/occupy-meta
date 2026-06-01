@@ -10,18 +10,16 @@
  * Players use @rpc to request builds.
  *
  * Integrates with GameStateComponent: only ticks when state is Playing.
- * Sends OccupyShowResultEvent when game ends.
+ * Match-end (result event + GameOver transition) is owned by OccupyCombatSystem.
  */
 
 import {
   Component,
-  EventService,
   ExecuteOn,
   NetworkingService,
   OnEntityStartEvent,
   OnWorldUpdateEvent,
   type OnWorldUpdateEventPayload,
-  Vec3,
   component,
   property,
   rpc,
@@ -34,12 +32,14 @@ import {
   BASE_COIN_INTERVAL,
   BASE_COIN_RATE,
   BASE_HP,
+  BUILD_COST_MYSTERY,
   BUILD_COST_NEIGHBOR,
   BUILD_COST_NORMAL,
   BuildingType,
   GAME_DURATION,
   GRID_COLS,
   GRID_ROWS,
+  LEVEL_MULT,
   MINE_COIN_INTERVAL,
   MINE_COIN_RATE,
   Owner,
@@ -58,12 +58,9 @@ import {
 
 import {
   GameState,
-  GameStateComponent,
   OnGameStateChanged,
   GameStateChangedPayload,
 } from './GameStateComponent';
-
-import {OccupyShowResultEvent, OccupyShowResultPayload} from './OccupyResultScreen';
 
 @component()
 export class HexGameManager extends Component {
@@ -84,6 +81,10 @@ export class HexGameManager extends Component {
   /** AI exploration: 0=unexplored, 1=explored. 108 chars. */
   @property({maxLength: 120})
   aiExplored: string = '';
+
+  /** Random tile types: B=barracks, T=tower, M=mine, ?=mystery, #=base, ~=baseNeighbor. 108 chars. */
+  @property({maxLength: 120})
+  tileTypes: string = '';
 
   @property()
   playerCoins: number = STARTING_COINS;
@@ -115,7 +116,9 @@ export class HexGameManager extends Component {
   private mineCoinTimer: number = 0;
   private aiBaseCoinTimer: number = 0;
   private aiMineCoinTimer: number = 0;
-  private gameEnded: boolean = false;
+  /** Player card levels (1..4), pushed from the lobby via RpcSetCardLevels just
+   *  before Start. Combat scales player unit hp/atk by these. AI stays Lv1. */
+  private playerCardLevels: Record<string, number> = {spearman: 1, archer: 1, tower: 1, mine: 1};
 
   @subscribe(OnEntityStartEvent, {execution: ExecuteOn.Everywhere})
   onStart(): void {
@@ -132,7 +135,6 @@ export class HexGameManager extends Component {
 
     if (payload.lastState === GameState.MainMenu && payload.newState === GameState.Playing) {
       console.log('[HexGameManager] New game start - initializing');
-      this.gameEnded = false;
       this.initializeGameState();
     } else if (payload.newState === GameState.MainMenu) {
       // Returning to lobby - deactivate
@@ -155,59 +157,57 @@ export class HexGameManager extends Component {
     // Build ownership string - player half (rows 0-5), AI half (rows 6-11)
     let ownership = '';
     let buildings = '';
-    let playerExp = '';
-    let aiExp = '';
+
+    // Generate random tile types for all 108 tiles
+    let types = '';
 
     for (let row = 0; row < GRID_ROWS; row++) {
       for (let col = 0; col < GRID_COLS; col++) {
-        const tileChar = getTileType(col, row);
+        const mapChar = getTileType(col, row);
         const owner = getInitialOwner(row);
         ownership += owner;
 
         // Place base buildings
-        if (tileChar === TileType.Base) {
+        if (mapChar === TileType.Base) {
           buildings += BuildingType.Base.toString();
         } else {
           buildings += BuildingType.None.toString();
         }
 
-        playerExp += '0';
-        aiExp += '0';
+        // Tile types: Base and BaseNeighbor keep their fixed type; others randomize
+        if (mapChar === TileType.Base) {
+          types += '#';
+        } else if (mapChar === TileType.BaseNeighbor) {
+          types += '~';
+        } else {
+          // Random assignment: 30% B, 25% T, 25% M, 20% ?
+          const r = Math.random();
+          if (r < 0.3) types += 'B';
+          else if (r < 0.55) types += 'T';
+          else if (r < 0.8) types += 'M';
+          else types += '?';
+        }
       }
     }
 
     this.tileOwnership = ownership;
     this.tileBuildings = buildings;
+    this.tileTypes = types;
 
-    // Calculate initial exploration based on base buildings
-    playerExp = this.computeExploration(Owner.Player, buildings, ownership);
-    aiExp = this.computeExploration(Owner.AI, buildings, ownership);
-
-    this.playerExplored = playerExp;
-    this.aiExplored = aiExp;
+    // Calculate initial exploration based on base buildings only (dynamic fog)
+    this.playerExplored = this.computeExploration(Owner.Player, buildings, ownership);
+    this.aiExplored = this.computeExploration(Owner.AI, buildings, ownership);
 
     // Calculate initial scores
     this.recalculateScores();
 
-    console.log('[HexGameManager] Game state initialized');
+    console.log('[HexGameManager] Game state initialized with random tile types');
   }
 
   private computeExploration(side: Owner, buildings: string, ownership: string): string {
     const explored = new Array(TOTAL_TILES).fill('0');
 
-    // Native half is always fully explored for each side (per design doc:
-    // "玩家自己半盘的 type 直接可见", player rows 0-5, AI rows 6-11)
-    const nativeOwner = side;
-    for (let row = 0; row < GRID_ROWS; row++) {
-      for (let col = 0; col < GRID_COLS; col++) {
-        const idx = tileIndex(col, row);
-        if (getInitialOwner(row) === nativeOwner) {
-          explored[idx] = '1';
-        }
-      }
-    }
-
-    // Buildings also reveal their 6 neighbors (relevant for enemy-half expansion)
+    // Only tiles with owned buildings + their 6 neighbors are explored (dynamic fog)
     for (let row = 0; row < GRID_ROWS; row++) {
       for (let col = 0; col < GRID_COLS; col++) {
         const idx = tileIndex(col, row);
@@ -215,16 +215,22 @@ export class HexGameManager extends Component {
         const tileOwner = ownership[idx];
 
         if (building > 0 && tileOwner === side) {
+          explored[idx] = '1';
           const neighbors = getNeighbors(col, row);
           for (const n of neighbors) {
             explored[tileIndex(n.col, n.row)] = '1';
           }
-          explored[idx] = '1';
         }
       }
     }
 
     return explored.join('');
+  }
+
+  /** Recalculate exploration for both sides. Call after building destruction. */
+  recalculateAllExploration(): void {
+    this.playerExplored = this.computeExploration(Owner.Player, this.tileBuildings, this.tileOwnership);
+    this.aiExplored = this.computeExploration(Owner.AI, this.tileBuildings, this.tileOwnership);
   }
 
   private recalculateScores(): void {
@@ -247,13 +253,17 @@ export class HexGameManager extends Component {
 
     const dt = payload.deltaTime;
 
-    // Timer countdown
+    // Timer countdown. Match-end is owned solely by OccupyCombatSystem.tickWinCheck
+    // (it reads this.timer <= 0). We only count down and clamp here to avoid two
+    // systems racing to send the result event / set GameOver.
     this.timer -= dt;
     if (this.timer <= 0) {
       this.timer = 0;
-      this.endGame();
-      return;
     }
+
+    // Keep territory score live: combat captures tiles every tick, so recompute
+    // each frame (108 chars, cheap) instead of only on player builds.
+    this.recalculateScores();
 
     // Base coin production (both sides) - only if base is alive
     this.baseCoinTimer += dt;
@@ -269,33 +279,10 @@ export class HexGameManager extends Component {
       this.mineCoinTimer -= MINE_COIN_INTERVAL;
       const playerMines = this.countBuildings(Owner.Player, BuildingType.Mine);
       const aiMines = this.countBuildings(Owner.AI, BuildingType.Mine);
-      this.playerCoins += playerMines * MINE_COIN_RATE;
+      // Player mine income scales with the Mine card level (AI fixed at Lv1).
+      const mineMult = LEVEL_MULT[this.getPlayerCardLevel('mine') - 1] ?? 1.0;
+      this.playerCoins += Math.round(playerMines * MINE_COIN_RATE * mineMult);
       this.aiCoins += aiMines * MINE_COIN_RATE;
-    }
-  }
-
-  private endGame(): void {
-    if (this.gameEnded) return;
-    this.gameEnded = true;
-    this.gameActive = false;
-
-    const won = this.playerScore > this.aiScore;
-    const isDraw = this.playerScore === this.aiScore;
-
-    console.log(`[HexGameManager] Game over! Player: ${this.playerScore}, AI: ${this.aiScore}, won=${won}, draw=${isDraw}`);
-
-    // Send result event globally so clients can show the result screen
-    EventService.sendGlobally(OccupyShowResultEvent, {
-      won,
-      isDraw,
-      playerScore: this.playerScore,
-      aiScore: this.aiScore,
-    });
-
-    // Transition game state to GameOver
-    const gs = GameStateComponent.instance;
-    if (gs) {
-      gs.setState(GameState.GameOver);
     }
   }
 
@@ -313,52 +300,90 @@ export class HexGameManager extends Component {
 
   @rpc()
   RpcBuildOnTile(col: number, row: number): void {
-    if (!this.gameActive) {
-      console.log('[HexGameManager] Build rejected - game not active');
-      return;
-    }
+    this.buildForSide(Owner.Player, col, row);
+  }
 
-    if (col < 0 || col >= GRID_COLS || row < 0 || row >= GRID_ROWS) {
-      console.log('[HexGameManager] Build rejected - out of bounds');
-      return;
-    }
+  /** Lobby pushes the player's card levels here right before the match starts. */
+  @rpc()
+  RpcSetCardLevels(spearman: number, archer: number, tower: number, mine: number): void {
+    this.playerCardLevels = {spearman, archer, tower, mine};
+    console.log(`[HexGameManager] Card levels set: S${spearman} A${archer} T${tower} M${mine}`);
+  }
+
+  /** Player card level (1..4) for a unit/building kind; 1 for kinds without a card. */
+  getPlayerCardLevel(kind: string): number {
+    return this.playerCardLevels[kind] ?? 1;
+  }
+
+  /**
+   * Validate + execute a build for either side. Shared by the player RPC and the
+   * AI driver (OccupyCombatSystem) so both go through one code path.
+   * Returns true if a building was placed.
+   */
+  buildForSide(side: Owner, col: number, row: number): boolean {
+    if (!this.gameActive) return false;
+    if (col < 0 || col >= GRID_COLS || row < 0 || row >= GRID_ROWS) return false;
 
     const idx = tileIndex(col, row);
 
-    if (this.tileOwnership[idx] !== Owner.Player) {
-      console.log('[HexGameManager] Build rejected - not player territory');
-      return;
+    if (this.tileOwnership[idx] !== side) return false;
+    if (this.tileBuildings[idx] !== BuildingType.None.toString()) return false;
+
+    const explored = side === Owner.Player ? this.playerExplored : this.aiExplored;
+    if (explored[idx] !== '1') return false;
+
+    // Read tile type from the runtime random assignment
+    const tileChar = this.tileTypes[idx] || getTileType(col, row);
+
+    // Determine cost
+    let cost: number;
+    if (tileChar === TileType.BaseNeighbor) cost = BUILD_COST_NEIGHBOR;
+    else if (tileChar === TileType.Mystery) cost = BUILD_COST_MYSTERY;
+    else cost = BUILD_COST_NORMAL;
+
+    const coins = side === Owner.Player ? this.playerCoins : this.aiCoins;
+    if (coins < cost) return false;
+
+    if (side === Owner.Player) this.playerCoins -= cost;
+    else this.aiCoins -= cost;
+
+    // Handle Mystery tile: 70% chance barracks, 30% chance empty (partial refund)
+    if (tileChar === TileType.Mystery) {
+      const resolved = Math.random() < 0.7;
+      if (!resolved) {
+        // Empty result - refund 50% of cost
+        const refund = Math.floor(cost * 0.5);
+        if (side === Owner.Player) this.playerCoins += refund;
+        else this.aiCoins += refund;
+        // Mark mystery tile as resolved empty (change '?' to 'E' so it can't be built again)
+        const typesArr = this.tileTypes.split('');
+        typesArr[idx] = 'E';
+        this.tileTypes = typesArr.join('');
+        console.log(`[HexGameManager] ${side} Mystery tile at (${col}, ${row}) resolved: EMPTY, refund ${refund}`);
+        return true;
+      }
+      // Resolved as barracks
+      const typesArr = this.tileTypes.split('');
+      typesArr[idx] = 'B';
+      this.tileTypes = typesArr.join('');
+      console.log(`[HexGameManager] ${side} Mystery tile at (${col}, ${row}) resolved: BARRACKS`);
     }
 
-    if (this.tileBuildings[idx] !== BuildingType.None.toString()) {
-      console.log('[HexGameManager] Build rejected - already has building');
-      return;
-    }
-
-    if (this.playerExplored[idx] !== '1') {
-      console.log('[HexGameManager] Build rejected - not explored');
-      return;
-    }
-
-    const tileChar = getTileType(col, row);
-    const cost = tileChar === TileType.BaseNeighbor ? BUILD_COST_NEIGHBOR : BUILD_COST_NORMAL;
-
-    if (this.playerCoins < cost) {
-      console.log('[HexGameManager] Build rejected - not enough coins');
-      return;
-    }
-
-    this.playerCoins -= cost;
-
-    const buildingType = getBuildingTypeForTile(tileChar);
+    const buildingType = getBuildingTypeForTile(tileChar === TileType.Mystery ? TileType.Barracks : tileChar);
 
     const buildingsArr = this.tileBuildings.split('');
     buildingsArr[idx] = buildingType.toString();
     this.tileBuildings = buildingsArr.join('');
 
-    console.log(`[HexGameManager] Built ${BuildingType[buildingType]} at (${col}, ${row}), cost: ${cost}`);
+    console.log(`[HexGameManager] ${side} built ${BuildingType[buildingType]} at (${col}, ${row}), cost: ${cost}`);
 
-    this.playerExplored = this.computeExploration(Owner.Player, this.tileBuildings, this.tileOwnership);
+    // Recalculate exploration for the building side (reveals neighbors)
+    if (side === Owner.Player) {
+      this.playerExplored = this.computeExploration(Owner.Player, this.tileBuildings, this.tileOwnership);
+    } else {
+      this.aiExplored = this.computeExploration(Owner.AI, this.tileBuildings, this.tileOwnership);
+    }
     this.recalculateScores();
+    return true;
   }
 }

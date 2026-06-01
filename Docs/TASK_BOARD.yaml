@@ -20,6 +20,8 @@ done:
   - Board Invisible Fix -- fixed stale HexBoardRenderer definitionAsset in player.hstf
   - Base Fix -- fixed marker pool race condition, both bases now render
   - Cleanup -- disabled avatar and joystick via PlayerPlatformComponent
+  - Script Errors + EDITOR_TODO -- fixed imports, permanent FocusedInteraction hides joystick
+  - Blank Screen Fix -- restored LobbyUI components so MainMenu displays on launch
 
 chopping_block:
   disabled_systems: []

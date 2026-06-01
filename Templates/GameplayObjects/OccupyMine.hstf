@@ -2,8 +2,8 @@
     "version": 6,
     "entities": [
         {
-            "id": "cd750133-16e0-4f86-a332-1e45d3b3d98b",
-            "name": "HexTile",
+            "id": "3f1956d5-098a-48b6-b310-51aac565f73e",
+            "name": "OccupyMine",
             "components": [
                 {
                     "data": {
@@ -51,7 +51,7 @@
             ]
         },
         {
-            "id": "449e714d-695f-436c-8753-c144a63a42c2",
+            "id": "5d068033-4da7-40c8-9b1b-c3a7d2a88026",
             "name": "Visuals",
             "components": [
                 {
@@ -69,7 +69,7 @@
                         "data": {
                             "mesh": {
                                 "packageOrRemoteId": "28344868928435269",
-                                "ingestionId": "16699898481029707768",
+                                "ingestionId": "4798472656174645093",
                                 "targetId": "481548839"
                             },
                             "shadowParams": {
@@ -87,16 +87,15 @@
                         "class": "horizon::platform_api::MaterialPlatformComponent",
                         "version": 2,
                         "data": {
+                            "materials": [
+                                {
+                                    "packageOrRemoteId": "28344868928435269",
+                                    "ingestionId": "13943769339143617571",
+                                    "targetId": "157013062"
+                                }
+                            ],
                             "perPartInstancedConstantParameterLists": []
                         }
-                    },
-                    "dataType": "horizon::DataDefinitionAsset"
-                },
-                {
-                    "data": {
-                        "class": "horizon::platform_api::ColorPlatformComponent",
-                        "version": 2,
-                        "data": {}
                     },
                     "dataType": "horizon::DataDefinitionAsset"
                 }
@@ -104,7 +103,7 @@
             "attributes": []
         },
         {
-            "id": "d3d6169c-7e4a-4a92-bfab-3e1d4ba4d2f8",
+            "id": "55216182-23ab-4144-bcdc-8fc057c44953",
             "name": "Collider",
             "components": [
                 {
@@ -130,13 +129,13 @@
     "relationships": [
         {
             "relationshipType": "RelationChildOf",
-            "source": "449e714d-695f-436c-8753-c144a63a42c2",
-            "destination": "cd750133-16e0-4f86-a332-1e45d3b3d98b"
+            "source": "5d068033-4da7-40c8-9b1b-c3a7d2a88026",
+            "destination": "3f1956d5-098a-48b6-b310-51aac565f73e"
         },
         {
             "relationshipType": "RelationChildOf",
-            "source": "d3d6169c-7e4a-4a92-bfab-3e1d4ba4d2f8",
-            "destination": "cd750133-16e0-4f86-a332-1e45d3b3d98b"
+            "source": "55216182-23ab-4144-bcdc-8fc057c44953",
+            "destination": "3f1956d5-098a-48b6-b310-51aac565f73e"
         }
     ]
 }

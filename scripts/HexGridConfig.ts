@@ -26,6 +26,7 @@ export enum TileType {
   Barracks = 'B',
   Tower = 'T',
   Mine = 'M',
+  Mystery = '?',
   Base = '#',
   BaseNeighbor = '~',
 }
@@ -130,11 +131,13 @@ export function getTileType(col: number, row: number): string {
 }
 
 /**
- * Convert grid (col, row) to world position (x, z), centered at origin
+ * Convert grid (col, row) to world position (x, z), centered at origin.
+ * Z is INVERTED so that low rows (player side) map to positive Z (screen bottom)
+ * and high rows (AI side) map to negative Z (screen top) under the top-down camera.
  */
 export function hexToWorld(col: number, row: number): {x: number; z: number} {
   const x = col * HEX_WIDTH + (row & 1) * (HEX_WIDTH / 2) - BOARD_OFFSET_X;
-  const z = row * HEX_HEIGHT - BOARD_OFFSET_Z;
+  const z = BOARD_OFFSET_Z - row * HEX_HEIGHT;
   return {x, z};
 }
 
@@ -142,9 +145,9 @@ export function hexToWorld(col: number, row: number): {x: number; z: number} {
  * Convert world position (x, z) back to grid (col, row)
  */
 export function worldToHex(worldX: number, worldZ: number): {col: number; row: number} {
-  // Undo offset
+  // Undo offset (Z is inverted: z_world = BOARD_OFFSET_Z - row * HEX_HEIGHT)
   const x = worldX + BOARD_OFFSET_X;
-  const z = worldZ + BOARD_OFFSET_Z;
+  const z = BOARD_OFFSET_Z - worldZ;
 
   // Approximate row first
   const row = Math.round(z / HEX_HEIGHT);
@@ -229,15 +232,22 @@ export function getBuildingTypeForTile(tileChar: string): BuildingType {
       return BuildingType.Mine;
     case TileType.Base:
       return BuildingType.Base;
+    case TileType.Mystery:
+      // Mystery tiles resolved at build time; default mapping is Barracks
+      return BuildingType.Barracks;
     default:
       return BuildingType.Barracks;
   }
 }
+
+/** Cost for Mystery tile */
+export const BUILD_COST_MYSTERY = 30;
 
 /**
  * Get build cost for a tile
  */
 export function getBuildCost(tileChar: string): number {
   if (tileChar === TileType.BaseNeighbor) return BUILD_COST_NEIGHBOR;
+  if (tileChar === TileType.Mystery) return BUILD_COST_MYSTERY;
   return BUILD_COST_NORMAL;
 }

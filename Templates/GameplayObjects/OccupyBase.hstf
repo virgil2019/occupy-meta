@@ -2,8 +2,8 @@
     "version": 6,
     "entities": [
         {
-            "id": "cd750133-16e0-4f86-a332-1e45d3b3d98b",
-            "name": "HexTile",
+            "id": "80fc2246-80f4-4f16-b900-54c2d9290043",
+            "name": "OccupyBase",
             "components": [
                 {
                     "data": {
@@ -51,7 +51,7 @@
             ]
         },
         {
-            "id": "449e714d-695f-436c-8753-c144a63a42c2",
+            "id": "af3f0f41-3c35-4f84-9610-4b076abd885e",
             "name": "Visuals",
             "components": [
                 {
@@ -69,7 +69,7 @@
                         "data": {
                             "mesh": {
                                 "packageOrRemoteId": "28344868928435269",
-                                "ingestionId": "16699898481029707768",
+                                "ingestionId": "7879361881823504703",
                                 "targetId": "481548839"
                             },
                             "shadowParams": {
@@ -87,16 +87,15 @@
                         "class": "horizon::platform_api::MaterialPlatformComponent",
                         "version": 2,
                         "data": {
+                            "materials": [
+                                {
+                                    "packageOrRemoteId": "28344868928435269",
+                                    "ingestionId": "7079233293707145314",
+                                    "targetId": "157013062"
+                                }
+                            ],
                             "perPartInstancedConstantParameterLists": []
                         }
-                    },
-                    "dataType": "horizon::DataDefinitionAsset"
-                },
-                {
-                    "data": {
-                        "class": "horizon::platform_api::ColorPlatformComponent",
-                        "version": 2,
-                        "data": {}
                     },
                     "dataType": "horizon::DataDefinitionAsset"
                 }
@@ -104,7 +103,7 @@
             "attributes": []
         },
         {
-            "id": "d3d6169c-7e4a-4a92-bfab-3e1d4ba4d2f8",
+            "id": "f8890bca-143a-4527-bdb0-9e3610b118de",
             "name": "Collider",
             "components": [
                 {
@@ -130,13 +129,13 @@
     "relationships": [
         {
             "relationshipType": "RelationChildOf",
-            "source": "449e714d-695f-436c-8753-c144a63a42c2",
-            "destination": "cd750133-16e0-4f86-a332-1e45d3b3d98b"
+            "source": "af3f0f41-3c35-4f84-9610-4b076abd885e",
+            "destination": "80fc2246-80f4-4f16-b900-54c2d9290043"
         },
         {
             "relationshipType": "RelationChildOf",
-            "source": "d3d6169c-7e4a-4a92-bfab-3e1d4ba4d2f8",
-            "destination": "cd750133-16e0-4f86-a332-1e45d3b3d98b"
+            "source": "f8890bca-143a-4527-bdb0-9e3610b118de",
+            "destination": "80fc2246-80f4-4f16-b900-54c2d9290043"
         }
     ]
 }

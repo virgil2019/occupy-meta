@@ -2,8 +2,8 @@
     "version": 6,
     "entities": [
         {
-            "id": "cd750133-16e0-4f86-a332-1e45d3b3d98b",
-            "name": "HexTile",
+            "id": "48a49eca-8a81-4ecf-957f-c15297ff9939",
+            "name": "OccupyTower",
             "components": [
                 {
                     "data": {
@@ -51,7 +51,7 @@
             ]
         },
         {
-            "id": "449e714d-695f-436c-8753-c144a63a42c2",
+            "id": "0e9a28b8-860e-479b-85e1-98b2052083b2",
             "name": "Visuals",
             "components": [
                 {
@@ -69,7 +69,7 @@
                         "data": {
                             "mesh": {
                                 "packageOrRemoteId": "28344868928435269",
-                                "ingestionId": "16699898481029707768",
+                                "ingestionId": "5170731545795614110",
                                 "targetId": "481548839"
                             },
                             "shadowParams": {
@@ -87,16 +87,15 @@
                         "class": "horizon::platform_api::MaterialPlatformComponent",
                         "version": 2,
                         "data": {
+                            "materials": [
+                                {
+                                    "packageOrRemoteId": "28344868928435269",
+                                    "ingestionId": "13484329903364087682",
+                                    "targetId": "157013062"
+                                }
+                            ],
                             "perPartInstancedConstantParameterLists": []
                         }
-                    },
-                    "dataType": "horizon::DataDefinitionAsset"
-                },
-                {
-                    "data": {
-                        "class": "horizon::platform_api::ColorPlatformComponent",
-                        "version": 2,
-                        "data": {}
                     },
                     "dataType": "horizon::DataDefinitionAsset"
                 }
@@ -104,7 +103,7 @@
             "attributes": []
         },
         {
-            "id": "d3d6169c-7e4a-4a92-bfab-3e1d4ba4d2f8",
+            "id": "755cb957-ca8c-4f7e-806b-8d77b3e6bf20",
             "name": "Collider",
             "components": [
                 {
@@ -130,13 +129,13 @@
     "relationships": [
         {
             "relationshipType": "RelationChildOf",
-            "source": "449e714d-695f-436c-8753-c144a63a42c2",
-            "destination": "cd750133-16e0-4f86-a332-1e45d3b3d98b"
+            "source": "0e9a28b8-860e-479b-85e1-98b2052083b2",
+            "destination": "48a49eca-8a81-4ecf-957f-c15297ff9939"
         },
         {
             "relationshipType": "RelationChildOf",
-            "source": "d3d6169c-7e4a-4a92-bfab-3e1d4ba4d2f8",
-            "destination": "cd750133-16e0-4f86-a332-1e45d3b3d98b"
+            "source": "755cb957-ca8c-4f7e-806b-8d77b3e6bf20",
+            "destination": "48a49eca-8a81-4ecf-957f-c15297ff9939"
         }
     ]
 }

@@ -65,6 +65,12 @@ interface CombatEntity {
   blacklistMs: number;
   produceCdMs: number;
   spawnedUnitType: string;
+  // Smooth movement interpolation
+  visualCol: number;
+  visualRow: number;
+  interpT: number;
+  interpFromCol: number;
+  interpFromRow: number;
 }
 
 const AI_THINK_MS = 2000;
@@ -179,6 +185,7 @@ export class OccupyCombatSystem extends Component {
       blacklistedTargetId: 0, blacklistMs: 0,
       produceCdMs: BASE_BARRACKS_INTERVAL_MS,
       spawnedUnitType: Math.random() < 0.5 ? 'spearman' : 'archer',
+      visualCol: col, visualRow: row, interpT: 1.0, interpFromCol: col, interpFromRow: row,
     };
     this.entities.set(ent.id, ent);
     if (stats.moveSpeed > 0) this.unitOnTile.set(tileIndex(col, row), ent.id);
@@ -207,7 +214,25 @@ export class OccupyCombatSystem extends Component {
       this.processTick();
       if (!this.running) break;
     }
+    this.tickInterpolation(payload.deltaTime);
     this.syncEntityData();
+  }
+
+  private tickInterpolation(dt: number): void {
+    // Update visual positions for smooth unit movement
+    for (const ent of this.entities.values()) {
+      if (ent.interpT >= 1.0) continue;
+      // Move visual position toward target
+      ent.interpT = Math.min(1.0, ent.interpT + dt * 4.0); // 0.25s to complete
+      if (ent.interpT >= 1.0) {
+        ent.visualCol = ent.col;
+        ent.visualRow = ent.row;
+      } else {
+        // Linear interpolation
+        ent.visualCol = ent.interpFromCol + (ent.col - ent.interpFromCol) * ent.interpT;
+        ent.visualRow = ent.interpFromRow + (ent.row - ent.interpFromRow) * ent.interpT;
+      }
+    }
   }
 
   private processTick(): void {
@@ -335,8 +360,10 @@ export class OccupyCombatSystem extends Component {
       if (this.gm.tileOwnership[i] !== Owner.AI) continue;
       if (this.gm.tileBuildings[i] !== '0') continue;
       if (this.gm.aiExplored[i] !== '1') continue;
+      const tileChar = this.gm.tileTypes[i] || getTileType(indexToColRow(i).col, indexToColRow(i).row);
+      if (tileChar === 'E') continue; // Resolved empty mystery tile
+      if (type !== null && tileChar !== type) continue;
       const {col, row} = indexToColRow(i);
-      if (type !== null && getTileType(col, row) !== type) continue;
       const dist = hexDistance(col, row, target.col, target.row);
       if (dist < bestDist) { bestDist = dist; best = {col, row}; }
     }
@@ -408,6 +435,10 @@ export class OccupyCombatSystem extends Component {
     }
     if (bestCol < 0) return false;
     this.unitOnTile.delete(tileIndex(ent.col, ent.row));
+    // Start smooth interpolation from current visual position
+    ent.interpFromCol = ent.visualCol;
+    ent.interpFromRow = ent.visualRow;
+    ent.interpT = 0.0;
     ent.col = bestCol; ent.row = bestRow;
     const newIdx = tileIndex(ent.col, ent.row);
     this.unitOnTile.set(newIdx, ent.id);
@@ -422,6 +453,7 @@ export class OccupyCombatSystem extends Component {
   private tickDeathCleanup(): void {
     const dead: number[] = [];
     for (const ent of this.entities.values()) { if (ent.hp <= 0) dead.push(ent.id); }
+    let buildingDied = false;
     for (let i = 0; i < dead.length; i++) {
       const ent = this.entities.get(dead[i]);
       if (!ent) continue;
@@ -435,10 +467,15 @@ export class OccupyCombatSystem extends Component {
         arr[idx] = '0';
         this.gm.tileBuildings = arr.join('');
         this.buildingOnTile.delete(idx);
+        buildingDied = true;
       }
       this.entities.delete(dead[i]);
     }
     if (dead.length > 0) this.syncBaseHP();
+    // Recalculate fog of war when any building is destroyed (re-fog mechanic)
+    if (buildingDied && this.gm) {
+      this.gm.recalculateAllExploration();
+    }
   }
 
   private syncBaseHP(): void {
@@ -495,8 +532,9 @@ export class OccupyCombatSystem extends Component {
     const arr: number[][] = [];
     for (const ent of this.entities.values()) {
       if (ent.hp <= 0) continue;
+      // Use visualCol/visualRow for smooth interpolated positions
       arr.push([ent.id, kindToIndex(ent.kind), ent.side === Owner.Player ? 0 : 1,
-        ent.col, ent.row, ent.hp, ent.hpMax]);
+        ent.visualCol, ent.visualRow, ent.hp, ent.hpMax]);
     }
     this.entityData = JSON.stringify(arr);
   }

@@ -180,23 +180,25 @@ export function getNeighbors(col: number, row: number): Array<{col: number; row:
   const isOdd = row & 1;
   const neighbors: Array<{col: number; row: number}> = [];
 
-  // Odd-r offset neighbor directions
+  // Odd-r offset: ODD rows are shifted right (matches hexToWorld / offsetToCube).
+  // The two direction sets were previously swapped, offsetting every neighbour
+  // by one column relative to the rendered layout.
   const directions = isOdd
     ? [
-        {dc: 1, dr: 0},   // East
-        {dc: 0, dr: -1},  // SE
-        {dc: -1, dr: -1}, // SW
-        {dc: -1, dr: 0},  // West
-        {dc: -1, dr: 1},  // NW
-        {dc: 0, dr: 1},   // NE
-      ]
-    : [
-        {dc: 1, dr: 0},   // East
+        {dc: 1, dr: 0},   // E
         {dc: 1, dr: -1},  // SE
         {dc: 0, dr: -1},  // SW
-        {dc: -1, dr: 0},  // West
+        {dc: -1, dr: 0},  // W
         {dc: 0, dr: 1},   // NW
         {dc: 1, dr: 1},   // NE
+      ]
+    : [
+        {dc: 1, dr: 0},   // E
+        {dc: 0, dr: -1},  // SE
+        {dc: -1, dr: -1}, // SW
+        {dc: -1, dr: 0},  // W
+        {dc: -1, dr: 1},  // NW
+        {dc: 0, dr: 1},   // NE
       ];
 
   for (const d of directions) {

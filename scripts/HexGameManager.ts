@@ -207,14 +207,9 @@ export class HexGameManager extends Component {
   private computeExploration(side: Owner, buildings: string, ownership: string): string {
     const explored = new Array(TOTAL_TILES).fill('0');
 
-    // Native half is always fully explored (design doc: 玩家自己半盘 type 直接可见)
-    for (let row = 0; row < GRID_ROWS; row++) {
-      for (let col = 0; col < GRID_COLS; col++) {
-        if (getInitialOwner(row) === side) explored[tileIndex(col, row)] = '1';
-      }
-    }
-
-    // Owned buildings + their 6 neighbors reveal the enemy half (dynamic fog)
+    // Dynamic fog only: a tile is explored iff it has an owned building or is
+    // adjacent to one. No half-board concept — exploration is purely
+    // building-driven, the same for both sides.
     for (let row = 0; row < GRID_ROWS; row++) {
       for (let col = 0; col < GRID_COLS; col++) {
         const idx = tileIndex(col, row);

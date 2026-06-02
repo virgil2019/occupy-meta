@@ -240,15 +240,18 @@ export class HexBoardRenderer extends Component {
       const t = this.tileEntities[i];
       if (t) t.enabledSelf = visible;
     }
+    // Tile text labels follow board visibility too. They have no per-frame enable
+    // pass (updateTileTexts only sets .text), so if they were pre-spawned while
+    // the board was hidden they must be re-enabled here or they stay invisible.
+    for (let i = 0; i < this.tileTextEntities.length; i++) {
+      const ent = this.tileTextEntities[i];
+      if (ent) ent.enabledSelf = visible;
+    }
     if (!visible) {
       this.hideAllMarkers();
       for (let i = 0; i < this.buildingIconPool.length; i++) {
         const icon = this.buildingIconPool[i];
         if (icon) icon.enabledSelf = false;
-      }
-      for (let i = 0; i < this.tileTextEntities.length; i++) {
-        const ent = this.tileTextEntities[i];
-        if (ent) ent.enabledSelf = false;
       }
     }
     if (visible) {

@@ -83,7 +83,20 @@ function kindToIndex(kind: string): number {
     case 'mine': return 3;
     case 'barracks': return 4;
     case 'base': return 5;
+    case 'ruin': return 6;
     default: return 0;
+  }
+}
+
+/** Map authoritative tileBuildings char to the combat-entity kind, or '' for empty. */
+function buildingCharToKind(c: string): string {
+  switch (c) {
+    case '1': return 'barracks';
+    case '2': return 'tower';
+    case '3': return 'mine';
+    case '4': return 'base';
+    case '5': return 'ruin';
+    default: return '';
   }
 }
 
@@ -140,29 +153,44 @@ export class OccupyCombatSystem extends Component {
   }
 
   /**
-   * Make the entity set match the authoritative tileBuildings string: for any
-   * tile that has a building but no combat entity yet, spawn one. This is what
-   * makes mid-game builds (player RPC AND AI) actually come alive — previously
-   * only buildings present at match start (the two bases) ever existed as
-   * entities, so player-built barracks/towers did nothing.
+   * Reconcile the entity set against the authoritative tileBuildings string.
+   * Handles three transitions:
+   *   - empty -> building: spawn the matching entity
+   *   - building destroyed: tickDeathCleanup converts the char to '5' (ruin)
+   *     and removes the buildingOnTile entry; the next reconcile spawns a ruin
+   *     entity in its place
+   *   - ruin overwritten by a new build (buildForSide accepts '5'): kind no
+   *     longer matches, so we destroy the ruin entity and spawn the new one
+   * This is what makes mid-game builds (player RPC AND AI) actually come alive.
    */
   private reconcileBuildings(): void {
     if (!this.gm) return;
     for (let i = 0; i < TOTAL_TILES; i++) {
-      const buildingChar = this.gm.tileBuildings[i];
-      if (buildingChar === '0') continue;
-      if (this.buildingOnTile.has(i)) continue;
+      const expectedKind = buildingCharToKind(this.gm.tileBuildings[i]);
+      const existingId = this.buildingOnTile.get(i);
+      const existingEnt = existingId !== undefined ? this.entities.get(existingId) : undefined;
+      const existingKind = existingEnt ? existingEnt.kind : '';
+
+      if (existingKind === expectedKind) {
+        // Same kind, but for ruins the side can drift after a unit captures the
+        // tile — update existingEnt.side so the client renders the right tint.
+        if (existingEnt && expectedKind === 'ruin') {
+          const liveSide = this.gm.tileOwnership[i] === Owner.Player ? Owner.Player : Owner.AI;
+          if (existingEnt.side !== liveSide) existingEnt.side = liveSide;
+        }
+        continue;
+      }
+
+      // Mismatch: drop the old entity (if any), then spawn the new one (if any).
+      if (existingId !== undefined && existingEnt) {
+        this.entities.delete(existingId);
+        this.buildingOnTile.delete(i);
+      }
+      if (expectedKind === '') continue;
+
       const colRow = indexToColRow(i);
       const side = this.gm.tileOwnership[i] === Owner.Player ? Owner.Player : Owner.AI;
-      let kind = '';
-      switch (buildingChar) {
-        case '1': kind = 'barracks'; break;
-        case '2': kind = 'tower'; break;
-        case '3': kind = 'mine'; break;
-        case '4': kind = 'base'; break;
-        default: continue;
-      }
-      const id = this.spawnEntity(kind, side, colRow.col, colRow.row);
+      const id = this.spawnEntity(expectedKind, side, colRow.col, colRow.row);
       this.buildingOnTile.set(i, id);
     }
   }
@@ -269,7 +297,10 @@ export class OccupyCombatSystem extends Component {
         if (!this.gm) break;
         if (this.gm.tileOwnership[idx] !== ent.side) continue;
         if (this.unitOnTile.has(idx)) continue;
-        if (this.gm.tileBuildings[idx] !== '0') continue;
+        // Empty or ruin tiles are valid spawn sites; only an active building
+        // (or base) blocks placement. Mirrors tryMove's no-block-on-buildings rule.
+        const bc = this.gm.tileBuildings[idx];
+        if (bc !== '0' && bc !== '5') continue;
         this.spawnEntity(ent.spawnedUnitType, ent.side, nb.col, nb.row);
         spawned = true;
         break;
@@ -358,7 +389,9 @@ export class OccupyCombatSystem extends Component {
     let bestDist = Infinity;
     for (let i = 0; i < TOTAL_TILES; i++) {
       if (this.gm.tileOwnership[i] !== Owner.AI) continue;
-      if (this.gm.tileBuildings[i] !== '0') continue;
+      // '0' = empty, '5' = ruin (rubble we can build over); both are buildable.
+      const bc = this.gm.tileBuildings[i];
+      if (bc !== '0' && bc !== '5') continue;
       if (this.gm.aiExplored[i] !== '1') continue;
       const tileChar = this.gm.tileTypes[i] || getTileType(indexToColRow(i).col, indexToColRow(i).row);
       if (tileChar === 'E') continue; // Resolved empty mystery tile
@@ -406,6 +439,7 @@ export class OccupyCombatSystem extends Component {
     let bestDist = 999999;
     for (const other of this.entities.values()) {
       if (other.side === ent.side || other.hp <= 0) continue;
+      if (other.kind === 'ruin') continue; // ruins are not valid targets
       if (other.id === ent.blacklistedTargetId) continue;
       const d = hexDistance(ent.col, ent.row, other.col, other.row);
       if (d < bestDist || (d === bestDist && best !== null && other.id < best.id)) {
@@ -452,7 +486,12 @@ export class OccupyCombatSystem extends Component {
 
   private tickDeathCleanup(): void {
     const dead: number[] = [];
-    for (const ent of this.entities.values()) { if (ent.hp <= 0) dead.push(ent.id); }
+    for (const ent of this.entities.values()) {
+      // Ruins are inert (no one targets them, no hp drain); guard against any
+      // future code path that might decrement their hp anyway.
+      if (ent.kind === 'ruin') continue;
+      if (ent.hp <= 0) dead.push(ent.id);
+    }
     let buildingDied = false;
     for (let i = 0; i < dead.length; i++) {
       const ent = this.entities.get(dead[i]);
@@ -464,7 +503,9 @@ export class OccupyCombatSystem extends Component {
       if (ent.moveSpeed === 0 && this.gm) {
         const idx = tileIndex(ent.col, ent.row);
         const arr = this.gm.tileBuildings.split('');
-        arr[idx] = '0';
+        // Destroyed buildings leave a ruin behind. reconcileBuildings will
+        // spawn the ruin entity on the next tick.
+        arr[idx] = BuildingType.Ruin.toString();
         this.gm.tileBuildings = arr.join('');
         this.buildingOnTile.delete(idx);
         buildingDied = true;

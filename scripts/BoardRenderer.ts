@@ -134,6 +134,10 @@ export class HexBoardRenderer extends Component {
   @property()
   labelTemplate: Maybe<TemplateAsset> = null;
 
+  /** Shown on a tile where a building used to be (persists for the rest of the match). */
+  @property()
+  ruinTemplate: Maybe<TemplateAsset> = null;
+
   private tileEntities: (Entity | null)[] = [];
   private tileColors: (ColorComponent | null)[] = [];
   private tilesSpawned: boolean = false;
@@ -185,6 +189,9 @@ export class HexBoardRenderer extends Component {
     }
     if (!this.labelTemplate) {
       this.labelTemplate = new TemplateAsset('@Templates/GameplayObjects/TileLabel.hstf');
+    }
+    if (!this.ruinTemplate) {
+      this.ruinTemplate = new TemplateAsset('@Templates/GameplayObjects/RuinMarker.hstf');
     }
 
     console.log('[HexBoardRenderer] Per-kind templates: ' +
@@ -244,7 +251,8 @@ export class HexBoardRenderer extends Component {
     this.dyingMarkers.clear();
   }
 
-  /** Template lookup for a server-side kindIdx (0=spearman, 1=archer, 2=tower, 3=mine, 4=barracks, 5=base). */
+  /** Template lookup for a server-side kindIdx
+   *  (0=spearman, 1=archer, 2=tower, 3=mine, 4=barracks, 5=base, 6=ruin). */
   private getTemplateForKind(kindIdx: number): TemplateAsset | null {
     switch (kindIdx) {
       case 0:
@@ -253,6 +261,7 @@ export class HexBoardRenderer extends Component {
       case 3: return this.mineTemplate || this.markerTemplate || null;
       case 4: return this.barracksTemplate || this.markerTemplate || null;
       case 5: return this.baseTemplate || this.markerTemplate || null;
+      case 6: return this.ruinTemplate || this.markerTemplate || null;
       default: return null;
     }
   }
@@ -409,6 +418,7 @@ export class HexBoardRenderer extends Component {
           case '2': textComp.text = 'T'; break; // tower
           case '3': textComp.text = 'M'; break; // mine
           case '4': textComp.text = 'G'; break; // base (G for general/headquarters)
+          case '5': textComp.text = ''; break;  // ruin — 3D ruin marker speaks for itself
           default: textComp.text = '?';
         }
         continue;
@@ -455,7 +465,9 @@ export class HexBoardRenderer extends Component {
       if (!colorComp) continue;
 
       if (explored && explored.length >= TOTAL_TILES && explored[i] !== '1') {
-        if (buildings && buildings[i] !== '0' && buildings[i] !== undefined && ownership[i] === Owner.AI) {
+        // Dim-red tint signals an enemy building visible through fog. Ruins
+        // (char '5') are inert rubble, not a threat — render them as plain fog.
+        if (buildings && buildings[i] !== '0' && buildings[i] !== '5' && buildings[i] !== undefined && ownership[i] === Owner.AI) {
           colorComp.color = COLOR_FOG_ENEMY_BUILDING;
         } else {
           colorComp.color = COLOR_FOG;
@@ -575,7 +587,7 @@ export class HexBoardRenderer extends Component {
     const yPos = isBase ? BASE_Y : isUnit ? UNIT_Y : BUILDING_Y;
     const scale = isBase ? BASE_SCALE : isUnit ? UNIT_SCALE : BUILDING_SCALE;
     const pos = hexToWorld(col, row);
-    const [r, g, b] = this.colorForKind(sideNum, isBase, isUnit);
+    const [r, g, b] = this.colorForKind(sideNum, kindIdx);
 
     // Insert placeholder immediately so subsequent frames see this id as active.
     const marker: ActiveMarker = {
@@ -616,8 +628,14 @@ export class HexBoardRenderer extends Component {
     return marker;
   }
 
-  /** Static base rgb per (side, role). Mirrors the legacy COLOR_* constants. */
-  private colorForKind(sideNum: number, isBase: boolean, isUnit: boolean): [number, number, number] {
+  /** Static base rgb per (side, kindIdx). Mirrors the legacy COLOR_* constants. */
+  private colorForKind(sideNum: number, kindIdx: number): [number, number, number] {
+    // Ruins are side-tinted but desaturated, so they read as "abandoned".
+    if (kindIdx === 6) {
+      return sideNum === 0 ? [0.4, 0.4, 0.5] : [0.5, 0.4, 0.4];
+    }
+    const isBase = kindIdx === 5;
+    const isUnit = kindIdx <= 1;
     if (sideNum === 0) {
       if (isBase) return [1.0, 1.0, 1.0];
       if (isUnit) return [0.2, 0.6, 1.0];

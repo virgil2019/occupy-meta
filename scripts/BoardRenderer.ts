@@ -21,13 +21,7 @@ import {
 import type {Entity, Maybe, OnWorldUpdateEventPayload} from 'meta/worlds';
 
 import {
-  BuildingType,
   TOTAL_TILES,
-  TileType,
-  getBuildingTypeForTile,
-  getBuildCost,
-  getNeighbors,
-  getTileType,
   hexToWorld,
   indexToColRow,
   Owner,
@@ -103,9 +97,6 @@ export class HexBoardRenderer extends Component {
   @property()
   tileTemplate: Maybe<TemplateAsset> = null;
 
-  @property()
-  buildingIconTemplate: Maybe<TemplateAsset> = null;
-
   // Per-kind entity templates (set in editor; OccupySoldier, OccupyTower, etc.) -- v2
   @property()
   soldierTemplate: Maybe<TemplateAsset> = null;
@@ -154,30 +145,12 @@ export class HexBoardRenderer extends Component {
   private markersReady: boolean = false;
   private totalMarkersSpawned: number = 0;
 
-  // Building icon pool (one per tile, 108 total)
-  private buildingIconPool: Entity[] = [];
-  private buildingIconColors: (ColorComponent | null)[] = [];
-  private buildingIconTransforms: (TransformComponent | null)[] = [];
-  private buildingIconTexts: (WorldTextComponent | null)[] = [];
-  private isSpawningIcons: boolean = false;
-  private iconSpawnIndex: number = 0;
-  private iconsReady: boolean = false;
-  private lastBuildingsStr: string = '';
-  private _resolvedIconTemplate: TemplateAsset | null = null;
-
   // Tile text labels (one per tile, 108 total) - for type letters on explored tiles
   private tileTexts: (WorldTextComponent | null)[] = [];
   private tileTextEntities: (Entity | null)[] = [];
   private tilesTextReady: boolean = false;
   private lastTileTextKey: string = '';
   private tileTextSpawnIndex: number = 0;
-
-  /**
-   * Set to false to hide building-icon disc overlay and show only 3D entity markers.
-   * True = show disc icons on tiles (can look cluttered when both layers render).
-   */
-  @property()
-  showBuildingIcons: boolean = true;
 
   // Pre-allocated for update loop
   private lastEntityData: string = '[]';
@@ -248,13 +221,8 @@ export class HexBoardRenderer extends Component {
     }
     if (!visible) {
       this.hideAllMarkers();
-      for (let i = 0; i < this.buildingIconPool.length; i++) {
-        const icon = this.buildingIconPool[i];
-        if (icon) icon.enabledSelf = false;
-      }
     }
     if (visible) {
-      this.lastBuildingsStr = '';
       this.lastTileTextKey = '';
     }
   }
@@ -292,18 +260,6 @@ export class HexBoardRenderer extends Component {
     this.markerSpawnPhase = 0;
     this.markerSpawnIndex = 0;
     this.totalMarkersSpawned = 0;
-  }
-
-  private beginIconSpawn(): void {
-    const iconTpl = this.buildingIconTemplate || this.markerTemplate;
-    if (!iconTpl) {
-      console.log('[HexBoardRenderer] No buildingIconTemplate or markerTemplate - skipping icon spawn');
-      return;
-    }
-    this._resolvedIconTemplate = iconTpl;
-    console.log('[HexBoardRenderer] Spawning building icon pool...');
-    this.isSpawningIcons = true;
-    this.iconSpawnIndex = 0;
   }
 
   /** Get template for a specific spawn phase, with fallback to markerTemplate */
@@ -372,14 +328,8 @@ export class HexBoardRenderer extends Component {
       return;
     }
 
-    // Phase 2.5: Spawn building icon pool
-    if (this.isSpawningIcons) {
-      this.spawnIconBatch();
-      return;
-    }
-
-    // Phase 2.6: Spawn tile text labels
-    if (!this.tilesTextReady && this.iconsReady) {
+    // Phase 2.5: Spawn tile text labels (after tiles spawned, sequentially after markers)
+    if (!this.tilesTextReady && this.tilesSpawned) {
       this.spawnTileTextBatch();
       return;
     }
@@ -389,7 +339,6 @@ export class HexBoardRenderer extends Component {
       this.updateTileColors();
       this.updateTileTexts();
       this.updateEntityMarkers();
-      this.updateBuildingIcons();
     }
   }
 
@@ -442,7 +391,6 @@ export class HexBoardRenderer extends Component {
       if (this.markerSpawnPhase > 4) {
         this.isSpawningMarkers = false;
         console.log(`[HexBoardRenderer] Marker pools spawned (${this.totalMarkersSpawned} total)`);
-        this.beginIconSpawn();
       }
       return;
     }
@@ -483,54 +431,7 @@ export class HexBoardRenderer extends Component {
       if (this.markerSpawnPhase > 4) {
         this.isSpawningMarkers = false;
         console.log(`[HexBoardRenderer] Marker pools spawned (${this.totalMarkersSpawned} total)`);
-        this.beginIconSpawn();
       }
-    }
-  }
-
-  private spawnIconBatch(): void {
-    if (!this._resolvedIconTemplate) {
-      this.isSpawningIcons = false;
-      return;
-    }
-
-    const endIndex = Math.min(this.iconSpawnIndex + TILES_PER_FRAME, TOTAL_TILES);
-
-    for (let i = this.iconSpawnIndex; i < endIndex; i++) {
-      const {col, row} = indexToColRow(i);
-      const pos = hexToWorld(col, row);
-
-      WorldService.get().spawnTemplate({
-        templateAsset: this._resolvedIconTemplate!,
-        networkMode: NetworkMode.LocalOnly,
-        position: new Vec3(pos.x, 0.25, pos.z),
-        rotation: Quaternion.identity,
-        scale: new Vec3(0.3, 0.02, 0.3),
-      }).then((ent: Entity) => {
-        this.buildingIconPool.push(ent);
-        ent.enabledSelf = false;
-
-        const children = ent.getChildren();
-        let colorComp: ColorComponent | null = null;
-        let textComp: WorldTextComponent | null = null;
-        for (const child of children) {
-          const c = child.getComponent(ColorComponent);
-          if (c) { colorComp = c; }
-          const t = child.getComponent(WorldTextComponent);
-          if (t) { textComp = t; }
-        }
-        this.buildingIconColors.push(colorComp);
-        this.buildingIconTransforms.push(ent.getComponent(TransformComponent));
-        this.buildingIconTexts.push(textComp);
-      });
-    }
-
-    this.iconSpawnIndex = endIndex;
-
-    if (this.iconSpawnIndex >= TOTAL_TILES) {
-      this.isSpawningIcons = false;
-      this.iconsReady = true;
-      console.log('[HexBoardRenderer] Building icon pool spawned');
     }
   }
 
@@ -827,141 +728,4 @@ export class HexBoardRenderer extends Component {
     }
   }
 
-  private updateBuildingIcons(): void {
-    if (!this.gameManager || !this.iconsReady) return;
-    // Early exit if building icon layer is disabled (show only 3D entity markers)
-    if (!this.showBuildingIcons) {
-      for (let i = 0; i < this.buildingIconPool.length; i++) {
-        const icon = this.buildingIconPool[i];
-        if (icon) icon.enabledSelf = false;
-      }
-      return;
-    }
-
-    const buildings = this.gameManager.tileBuildings;
-    const ownership = this.gameManager.tileOwnership;
-    const explored = this.gameManager.playerExplored;
-    if (!buildings || !ownership) return;
-
-    const cacheKey = buildings + (explored || '');
-    if (cacheKey === this.lastBuildingsStr) return;
-    this.lastBuildingsStr = cacheKey;
-
-    for (let i = 0; i < TOTAL_TILES; i++) {
-      const icon = this.buildingIconPool[i];
-      if (!icon) continue;
-
-      const buildingChar = buildings[i];
-      const owner = ownership[i];
-      const {col, row} = indexToColRow(i);
-
-      // Case 1: Tile has a building - show building icon
-      if (buildingChar !== '0' && buildingChar !== undefined) {
-        icon.enabledSelf = true;
-
-        const colorComp = this.buildingIconColors[i];
-        if (colorComp) {
-          if (owner === Owner.Player) {
-            // Blue-toned building icons for player side (harmonize with blue tiles)
-            switch (buildingChar) {
-              case '1': colorComp.color = new Color(0.3, 0.6, 1.0, 1.0); break; // barracks - bright blue
-              case '2': colorComp.color = new Color(0.4, 0.45, 0.9, 1.0); break; // tower - blue-violet
-              case '3': colorComp.color = new Color(0.35, 0.55, 0.85, 1.0); break; // mine - steel blue
-              case '4': colorComp.color = new Color(0.7, 0.85, 1.0, 1.0); break; // base - pale blue-white
-              default: colorComp.color = new Color(0.3, 0.4, 0.7, 1.0);
-            }
-          } else {
-            switch (buildingChar) {
-              case '1': colorComp.color = new Color(1.0, 0.5, 0.1, 1.0); break;
-              case '2': colorComp.color = new Color(0.8, 0.4, 0.0, 1.0); break;
-              case '3': colorComp.color = new Color(0.8, 0.6, 0.0, 1.0); break;
-              case '4': colorComp.color = new Color(1.0, 0.1, 0.1, 1.0); break;
-              default: colorComp.color = new Color(0.5, 0.5, 0.5, 1.0);
-            }
-          }
-        }
-
-        const transform = this.buildingIconTransforms[i];
-        if (transform) {
-          const pos = hexToWorld(col, row);
-          transform.worldPosition = new Vec3(pos.x, 0.25, pos.z);
-        }
-
-        const builtTextComp = this.buildingIconTexts[i];
-        if (builtTextComp) {
-          builtTextComp.text = '';
-        }
-        continue;
-      }
-
-      // Case 2: Empty tile - show buildable preview if explored, player-owned, AND adjacent to a player building
-      if (owner === Owner.Player && explored && explored.length >= TOTAL_TILES && explored[i] === '1') {
-        const tileTypes = this.gameManager.tileTypes;
-        const tileChar = (tileTypes && tileTypes.length > i) ? tileTypes[i] : getTileType(col, row);
-
-        // Resolved empty mystery tiles and base tiles cannot be built on
-        if (tileChar === '#' || tileChar === 'E') {
-          icon.enabledSelf = false;
-          continue;
-        }
-
-        const buildingType = getBuildingTypeForTile(tileChar);
-
-        // Only show buildable preview if adjacent to an existing player building
-        const neighbors = getNeighbors(col, row);
-        let adjacentToBuilding = false;
-        for (const n of neighbors) {
-          const nIdx = tileIndex(n.col, n.row);
-          if (ownership[nIdx] === Owner.Player && buildings[nIdx] !== '0' && buildings[nIdx] !== undefined) {
-            adjacentToBuilding = true;
-            break;
-          }
-        }
-        if (!adjacentToBuilding) {
-          icon.enabledSelf = false;
-          continue;
-        }
-
-        icon.enabledSelf = true;
-
-        const colorComp = this.buildingIconColors[i];
-        if (colorComp) {
-          // Blue-toned buildable previews (dimmer than built buildings, still blue family)
-          switch (buildingType) {
-            case BuildingType.Barracks:
-              colorComp.color = new Color(0.15, 0.3, 0.55, 1.0); break; // dim blue
-            case BuildingType.Tower:
-              colorComp.color = new Color(0.2, 0.25, 0.5, 1.0); break; // dim blue-violet
-            case BuildingType.Mine:
-              colorComp.color = new Color(0.2, 0.35, 0.5, 1.0); break; // dim steel-blue
-            default:
-              colorComp.color = new Color(0.15, 0.2, 0.4, 1.0); break; // muted blue
-          }
-        }
-
-        const transform = this.buildingIconTransforms[i];
-        if (transform) {
-          const pos = hexToWorld(col, row);
-          transform.worldPosition = new Vec3(pos.x, 0.15, pos.z);
-        }
-
-        const textComp = this.buildingIconTexts[i];
-        if (textComp) {
-          const cost = getBuildCost(tileChar);
-          // Show distinct symbol per building type + cost
-          let symbol = '?';
-          if (tileChar === 'B') symbol = 'B';
-          else if (tileChar === 'T') symbol = 'T';
-          else if (tileChar === 'M') symbol = 'M';
-          else if (tileChar === '?') symbol = '?';
-          else if (tileChar === '~') symbol = '~';
-          textComp.text = `${symbol}\n${cost}`;
-        }
-        continue;
-      }
-
-      // Case 3: Not visible
-      icon.enabledSelf = false;
-    }
-  }
 }

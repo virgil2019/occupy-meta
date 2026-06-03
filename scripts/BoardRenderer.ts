@@ -159,6 +159,7 @@ export class HexBoardRenderer extends Component {
   private tilesTextReady: boolean = false;
   private lastTileTextKey: string = '';
   private tileTextSpawnIndex: number = 0;
+  private diagDumpedTileText: boolean = false; // one-shot tile-text-layer diagnostic
 
   // Diagnostic flags (per-match, reset on show)
   private loggedFirstRender: boolean = false;
@@ -382,6 +383,20 @@ export class HexBoardRenderer extends Component {
 
   private updateTileTexts(): void {
     if (!this.gameManager || !this.tilesTextReady) return;
+
+    // First-frame diagnostic: dump tile-text layer state so we can tell at a
+    // glance whether spawn produced entities + WorldText components.
+    if (!this.diagDumpedTileText) {
+      this.diagDumpedTileText = true;
+      let textCompFound = 0, enabledCount = 0;
+      for (let i = 0; i < this.tileTextEntities.length; i++) {
+        if (this.tileTexts[i]) textCompFound++;
+        const e = this.tileTextEntities[i];
+        if (e && e.enabledSelf) enabledCount++;
+      }
+      console.log(`[HexBoardRenderer DIAG tileText] entities=${this.tileTextEntities.length} ` +
+        `WorldTextFound=${textCompFound} enabledSelf=${enabledCount} boardVisible=${this.boardVisible}`);
+    }
 
     const ownership = this.gameManager.tileOwnership;
     const explored = this.gameManager.playerExplored;

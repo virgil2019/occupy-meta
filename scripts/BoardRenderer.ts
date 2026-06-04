@@ -429,16 +429,10 @@ export class HexBoardRenderer extends Component {
       }
 
       const buildingChar = buildings[i];
-      // If tile has a building, show its type letter
+      // If a building or ruin is present, leave the text empty — the 3D
+      // marker on top speaks for the tile by itself.
       if (buildingChar !== '0' && buildingChar !== undefined) {
-        switch (buildingChar) {
-          case '1': textComp.text = 'B'; break; // barracks
-          case '2': textComp.text = 'T'; break; // tower
-          case '3': textComp.text = 'M'; break; // mine
-          case '4': textComp.text = 'G'; break; // base (G for general/headquarters)
-          case '5': textComp.text = ''; break;  // ruin — 3D ruin marker speaks for itself
-          default: textComp.text = '?';
-        }
+        textComp.text = '';
         continue;
       }
 

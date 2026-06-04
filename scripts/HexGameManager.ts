@@ -216,9 +216,7 @@ export class HexGameManager extends Component {
         const building = parseInt(buildings[idx]);
         const tileOwner = ownership[idx];
 
-        // Ruins (5) are inert and don't provide vision — that's the point of the
-        // re-fog mechanic when buildings are destroyed.
-        if (building > 0 && building !== BuildingType.Ruin && tileOwner === side) {
+        if (building > 0 && tileOwner === side) {
           explored[idx] = '1';
           const neighbors = getNeighbors(col, row);
           for (const n of neighbors) {
@@ -331,13 +329,7 @@ export class HexGameManager extends Component {
     const idx = tileIndex(col, row);
 
     if (this.tileOwnership[idx] !== side) return false;
-    // Allow building on an empty tile OR on a ruin (re-claiming the rubble of
-    // a destroyed structure). reconcileBuildings will destroy the ruin entity
-    // and spawn the new building on the next tick.
-    const existing = this.tileBuildings[idx];
-    if (existing !== BuildingType.None.toString() && existing !== BuildingType.Ruin.toString()) {
-      return false;
-    }
+    if (this.tileBuildings[idx] !== BuildingType.None.toString()) return false;
 
     const explored = side === Owner.Player ? this.playerExplored : this.aiExplored;
     if (explored[idx] !== '1') return false;

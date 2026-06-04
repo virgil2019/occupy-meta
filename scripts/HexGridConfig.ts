@@ -38,6 +38,9 @@ export enum BuildingType {
   Tower = 2,
   Mine = 3,
   Base = 4,
+  /** A destroyed building's remains. Blocks normal "build on empty tile" only by
+   *  signaling that this tile WAS built; buildForSide treats Ruin as buildable. */
+  Ruin = 5,
 }
 
 // ─── Ownership ────────────────────────────────────────────────────────────────
@@ -74,9 +77,13 @@ export const UNIT_STATS: Record<string, {hp: number; atk: number; range: number;
   mine: {hp: 40, atk: 0, range: 0, moveSpeed: 0, attackSpeed: 0},
   barracks: {hp: 100, atk: 0, range: 0, moveSpeed: 0, attackSpeed: 0},
   base: {hp: 500, atk: 10, range: 2, moveSpeed: 0, attackSpeed: 1.0},
+  /** Inert remains. combat code skips it (no targeting, no death-cleanup),
+   *  but use a large hp sentinel so any future "AoE damages all buildings"
+   *  effect doesn't accidentally 1-shot ruins. */
+  ruin: {hp: 999999, atk: 0, range: 0, moveSpeed: 0, attackSpeed: 0},
 };
 
-export type EntityKind = 'spearman' | 'archer' | 'tower' | 'mine' | 'barracks' | 'base';
+export type EntityKind = 'spearman' | 'archer' | 'tower' | 'mine' | 'barracks' | 'base' | 'ruin';
 
 // Level multipliers (index = level - 1)
 export const LEVEL_MULT = [1.0, 1.2, 1.5, 2.0];

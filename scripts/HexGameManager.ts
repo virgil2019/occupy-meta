@@ -33,7 +33,6 @@ import {
   BASE_COIN_RATE,
   BASE_HP,
   BUILD_COST_MYSTERY,
-  BUILD_COST_NEIGHBOR,
   BUILD_COST_NORMAL,
   BuildingType,
   GAME_DURATION,
@@ -174,11 +173,9 @@ export class HexGameManager extends Component {
           buildings += BuildingType.None.toString();
         }
 
-        // Tile types: Base and BaseNeighbor keep their fixed type; others randomize
+        // Tile types: Base is positional; every other tile is rolled randomly.
         if (mapChar === TileType.Base) {
           types += '#';
-        } else if (mapChar === TileType.BaseNeighbor) {
-          types += '~';
         } else {
           // Random assignment: 30% B, 25% T, 25% M, 20% ?
           const r = Math.random();
@@ -194,7 +191,8 @@ export class HexGameManager extends Component {
     this.tileBuildings = buildings;
     this.tileTypes = types;
 
-    // Calculate initial exploration based on base buildings only (dynamic fog)
+    // Calculate initial exploration based on base buildings only (dynamic fog).
+    // tileTypes is now passed too so resolved-empty mysteries ('E') contribute vision.
     this.playerExplored = this.computeExploration(Owner.Player, buildings, ownership);
     this.aiExplored = this.computeExploration(Owner.AI, buildings, ownership);
 
@@ -206,19 +204,24 @@ export class HexGameManager extends Component {
 
   private computeExploration(side: Owner, buildings: string, ownership: string): string {
     const explored = new Array(TOTAL_TILES).fill('0');
+    const types = this.tileTypes;
 
-    // Dynamic fog only: a tile is explored iff it has an owned building or is
-    // adjacent to one. No half-board concept — exploration is purely
-    // building-driven, the same for both sides.
+    // Dynamic fog only: a tile is explored iff
+    //   (a) it has an owned non-ruin building, OR
+    //   (b) it is an owned resolved-empty mystery ('E', i.e. an "empty plot")
+    // ...and the same rule reveals its 6 hex neighbours. Ruins (5) are inert
+    // and don't contribute vision — that's the re-fog mechanic.
     for (let row = 0; row < GRID_ROWS; row++) {
       for (let col = 0; col < GRID_COLS; col++) {
         const idx = tileIndex(col, row);
         const building = parseInt(buildings[idx]);
         const tileOwner = ownership[idx];
+        const tileChar = types ? types[idx] : '';
 
-        // Ruins (5) are inert and don't provide vision — that's the point of the
-        // re-fog mechanic when buildings are destroyed.
-        if (building > 0 && building !== BuildingType.Ruin && tileOwner === side) {
+        const ownedBuilding = building > 0 && building !== BuildingType.Ruin;
+        const ownedEmptyPlot = tileChar === 'E';
+
+        if ((ownedBuilding || ownedEmptyPlot) && tileOwner === side) {
           explored[idx] = '1';
           const neighbors = getNeighbors(col, row);
           for (const n of neighbors) {
@@ -345,10 +348,14 @@ export class HexGameManager extends Component {
     // Read tile type from the runtime random assignment
     const tileChar = this.tileTypes[idx] || getTileType(col, row);
 
+    // A Mystery tile that previously resolved to 'E' (empty plot) is consumed —
+    // it occupies the slot (provides vision via computeExploration) and cannot
+    // be built on again.
+    if (tileChar === 'E') return false;
+
     // Determine cost
     let cost: number;
-    if (tileChar === TileType.BaseNeighbor) cost = BUILD_COST_NEIGHBOR;
-    else if (tileChar === TileType.Mystery) cost = BUILD_COST_MYSTERY;
+    if (tileChar === TileType.Mystery) cost = BUILD_COST_MYSTERY;
     else cost = BUILD_COST_NORMAL;
 
     const coins = side === Owner.Player ? this.playerCoins : this.aiCoins;
@@ -357,19 +364,27 @@ export class HexGameManager extends Component {
     if (side === Owner.Player) this.playerCoins -= cost;
     else this.aiCoins -= cost;
 
-    // Handle Mystery tile: 70% chance barracks, 30% chance empty (partial refund)
+    // Handle Mystery tile: 30% chance barracks, 70% chance empty (partial refund)
     if (tileChar === TileType.Mystery) {
-      const resolved = Math.random() < 0.7;
+      const resolved = Math.random() < 0.3;
       if (!resolved) {
         // Empty result - refund 50% of cost
         const refund = Math.floor(cost * 0.5);
         if (side === Owner.Player) this.playerCoins += refund;
         else this.aiCoins += refund;
-        // Mark mystery tile as resolved empty (change '?' to 'E' so it can't be built again)
+        // Mark mystery tile as resolved empty (change '?' to 'E' so it can't be built again).
+        // 'E' tiles count as a friendly owned plot in computeExploration and reveal
+        // their neighbors just like a building.
         const typesArr = this.tileTypes.split('');
         typesArr[idx] = 'E';
         this.tileTypes = typesArr.join('');
-        console.log(`[HexGameManager] ${side} Mystery tile at (${col}, ${row}) resolved: EMPTY, refund ${refund}`);
+        // Recalculate exploration for the player who claimed the plot.
+        if (side === Owner.Player) {
+          this.playerExplored = this.computeExploration(Owner.Player, this.tileBuildings, this.tileOwnership);
+        } else {
+          this.aiExplored = this.computeExploration(Owner.AI, this.tileBuildings, this.tileOwnership);
+        }
+        console.log(`[HexGameManager] ${side} Mystery tile at (${col}, ${row}) resolved: EMPTY (owned plot), refund ${refund}`);
         return true;
       }
       // Resolved as barracks

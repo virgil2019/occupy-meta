@@ -437,9 +437,8 @@ export class HexBoardRenderer extends Component {
         continue;
       }
 
-      // Empty explored tile - show tile type letter from runtime random assignment
       // Empty buildable tile: letter on first line, cost on second.
-      // Base ('#') and resolved-empty mystery ('E') show nothing.
+      // Base ('#') and resolved-empty mystery ('E', an owned plot) show nothing.
       const tileChar = tileTypes[i];
       let symbol = '';
       switch (tileChar) {
@@ -447,7 +446,6 @@ export class HexBoardRenderer extends Component {
         case 'T': symbol = 'T'; break;
         case 'M': symbol = 'M'; break;
         case '?': symbol = '?'; break;
-        case '~': symbol = '~'; break;
         // '#' base + 'E' resolved-empty mystery: no label
         default: symbol = '';
       }

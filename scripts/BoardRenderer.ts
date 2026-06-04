@@ -22,6 +22,7 @@ import type {Entity, Maybe, OnWorldUpdateEventPayload} from 'meta/worlds';
 
 import {
   TOTAL_TILES,
+  getBuildCost,
   hexToWorld,
   indexToColRow,
   Owner,
@@ -437,17 +438,20 @@ export class HexBoardRenderer extends Component {
       }
 
       // Empty explored tile - show tile type letter from runtime random assignment
+      // Empty buildable tile: letter on first line, cost on second.
+      // Base ('#') and resolved-empty mystery ('E') show nothing.
       const tileChar = tileTypes[i];
+      let symbol = '';
       switch (tileChar) {
-        case 'B': textComp.text = 'B'; break;
-        case 'T': textComp.text = 'T'; break;
-        case 'M': textComp.text = 'M'; break;
-        case '?': textComp.text = '?'; break;
-        case '#': textComp.text = 'G'; break;
-        case '~': textComp.text = '~'; break;
-        case 'E': textComp.text = ''; break; // Resolved empty mystery tile
-        default: textComp.text = '';
+        case 'B': symbol = 'B'; break;
+        case 'T': symbol = 'T'; break;
+        case 'M': symbol = 'M'; break;
+        case '?': symbol = '?'; break;
+        case '~': symbol = '~'; break;
+        // '#' base + 'E' resolved-empty mystery: no label
+        default: symbol = '';
       }
+      textComp.text = symbol ? `${symbol}\n${getBuildCost(tileChar)}` : '';
     }
   }
 

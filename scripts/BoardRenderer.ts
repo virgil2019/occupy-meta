@@ -590,10 +590,12 @@ export class HexBoardRenderer extends Component {
     }
   }
 
-  /** Request a marker spawn for a server entity id; returns the (initially unfilled) ActiveMarker. */
-  private spawnMarker(id: number, kindIdx: number, sideNum: number, col: number, row: number): ActiveMarker | null {
+  /** Request a marker spawn for a server entity id; returns the (initially unfilled) ActiveMarker.
+   *  Returns undefined (not null) so the call site's `let marker = this.activeMarkers.get(id)`
+   *  (whose Map.get return is `T | undefined`) can be reassigned without a type widening error. */
+  private spawnMarker(id: number, kindIdx: number, sideNum: number, col: number, row: number): ActiveMarker | undefined {
     const template = this.getTemplateForKind(kindIdx);
-    if (!template) return null;
+    if (!template) return undefined;
 
     const isBase = kindIdx === 5;
     const isUnit = kindIdx <= 1;

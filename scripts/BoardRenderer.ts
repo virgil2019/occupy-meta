@@ -197,8 +197,12 @@ export class HexBoardRenderer extends Component {
   onGameStateChanged(payload: GameStateChangedLocalPayload): void {
     if (NetworkingService.get().isServerContext()) return;
     const show = payload.newState === GameState.Playing || payload.newState === GameState.GameOver;
+    console.log(`[HexBoardRenderer DIAG] onGameStateChanged newState=${payload.newState} show=${show} tilesSpawned=${this.tilesSpawned} tileEntities.length=${this.tileEntities.length}`);
     this.boardVisible = show;
     this.setBoardVisible(show);
+    let aliveCount = 0;
+    for (let i = 0; i < this.tileEntities.length; i++) if (this.tileEntities[i]) aliveCount++;
+    console.log(`[HexBoardRenderer DIAG] after setBoardVisible(${show}): aliveTileEntities=${aliveCount}/${this.tileEntities.length}`);
   }
 
   /** Toggle visibility of all spawned tiles + markers */

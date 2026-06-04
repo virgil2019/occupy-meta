@@ -42,14 +42,6 @@ const COLOR_FOG = new Color(0.15, 0.15, 0.15, 1.0);
 // Dimmed red/orange for enemy tiles with buildings visible through fog
 const COLOR_FOG_ENEMY_BUILDING = new Color(0.4, 0.15, 0.1, 1.0);
 
-// Entity marker colors - distinct per type and side
-const COLOR_PLAYER_BASE = new Color(1.0, 1.0, 1.0, 1.0);
-const COLOR_AI_BASE = new Color(1.0, 0.1, 0.1, 1.0);
-const COLOR_PLAYER_BUILDING = new Color(0.0, 0.7, 0.9, 1.0);
-const COLOR_AI_BUILDING = new Color(1.0, 0.5, 0.1, 1.0);
-const COLOR_PLAYER_UNIT = new Color(0.2, 0.6, 1.0, 1.0);
-const COLOR_AI_UNIT = new Color(1.0, 0.2, 0.2, 1.0);
-
 const TILE_SCALE = new Vec3(0.92, 1.0, 0.92);
 // Scales per entity kind (applied to the spawned template)
 const BASE_SCALE = new Vec3(0.7, 0.7, 0.7);
@@ -63,22 +55,41 @@ const BASE_Y = 0.35;
 /** Max tiles to spawn per frame to avoid mobile hitches */
 const TILES_PER_FRAME = 10;
 
-/** Max entity markers to spawn per frame */
-const MARKERS_PER_FRAME = 8;
+// Death animation tuning
+const DEATH_DURATION_MS = 300;
+const DEATH_SINK_DISTANCE = 0.5;
 
-// Pool sizes per entity kind
-const POOL_SIZE_SOLDIER = 24; // spearman + archer combined
-const POOL_SIZE_TOWER = 10;
-const POOL_SIZE_MINE = 10;
-const POOL_SIZE_BARRACKS = 10;
-const POOL_SIZE_BASE = 4;
-const TOTAL_MARKERS = POOL_SIZE_SOLDIER + POOL_SIZE_TOWER + POOL_SIZE_MINE + POOL_SIZE_BARRACKS + POOL_SIZE_BASE;
+/** A live marker; entity/color/transform are null between spawn request and the .then resolution. */
+interface ActiveMarker {
+  entity: Entity | null;
+  color: ColorComponent | null;
+  transform: TransformComponent | null;
+  kindIdx: number;
+  sideNum: number;
+  isBase: boolean;
+  isUnit: boolean;
+  /** Base rgb (alpha applied dynamically during death). */
+  baseR: number;
+  baseG: number;
+  baseB: number;
+  /** Last reconciled grid position + world Y, used as death-animation start. */
+  lastCol: number;
+  lastRow: number;
+  lastY: number;
+}
 
-/** Marker pool entry with cached components */
-interface MarkerEntry {
+/** A marker currently playing the death animation. */
+interface DyingMarker {
   entity: Entity;
   color: ColorComponent | null;
   transform: TransformComponent | null;
+  elapsedMs: number;
+  startX: number;
+  startY: number;
+  startZ: number;
+  baseR: number;
+  baseG: number;
+  baseB: number;
 }
 
 /**
@@ -89,8 +100,11 @@ interface MarkerEntry {
  * Component Networking: Local (client-only rendering)
  * Component Ownership: Not Networked (runs on owning client)
  *
- * Spawning is staggered across frames (10 tiles/frame) to prevent
- * mobile performance hitches from 108 simultaneous entity spawns.
+ * Tile background + tile-text label spawn is staggered across frames
+ * (10/frame) to amortize the 108-entity startup cost. Combat-entity
+ * markers (units/buildings/bases) are spawned dynamically per server
+ * entity id as combat creates them, and play a 0.3s sink+fade death
+ * animation before being destroyed when the server entity disappears.
  */
 @component()
 export class HexBoardRenderer extends Component {
@@ -120,6 +134,10 @@ export class HexBoardRenderer extends Component {
   @property()
   labelTemplate: Maybe<TemplateAsset> = null;
 
+  /** Shown on a tile where a building used to be (persists for the rest of the match). */
+  @property()
+  ruinTemplate: Maybe<TemplateAsset> = null;
+
   private tileEntities: (Entity | null)[] = [];
   private tileColors: (ColorComponent | null)[] = [];
   private tilesSpawned: boolean = false;
@@ -131,19 +149,9 @@ export class HexBoardRenderer extends Component {
   private isSpawning: boolean = false;
   private spawnIndex: number = 0;
 
-  // Per-kind marker pools
-  private soldierPool: MarkerEntry[] = [];
-  private towerPool: MarkerEntry[] = [];
-  private minePool: MarkerEntry[] = [];
-  private barracksPool: MarkerEntry[] = [];
-  private basePool: MarkerEntry[] = [];
-
-  // Spawning state for markers
-  private isSpawningMarkers: boolean = false;
-  private markerSpawnPhase: number = 0; // 0=soldier, 1=tower, 2=mine, 3=barracks, 4=base
-  private markerSpawnIndex: number = 0;
-  private markersReady: boolean = false;
-  private totalMarkersSpawned: number = 0;
+  // Dynamic combat-entity markers (spawn-on-demand per server entity id)
+  private activeMarkers: Map<number, ActiveMarker> = new Map();
+  private dyingMarkers: Map<number, DyingMarker> = new Map();
 
   // Tile text labels (one per tile, 108 total) - for type letters on explored tiles
   private tileTexts: (WorldTextComponent | null)[] = [];
@@ -151,10 +159,9 @@ export class HexBoardRenderer extends Component {
   private tilesTextReady: boolean = false;
   private lastTileTextKey: string = '';
   private tileTextSpawnIndex: number = 0;
+  private diagDumpedTileText: boolean = false; // one-shot tile-text-layer diagnostic
 
-  // Pre-allocated for update loop
-  private lastEntityData: string = '[]';
-  private lastEntityCount: number = -1;
+  // Diagnostic flags (per-match, reset on show)
   private loggedFirstRender: boolean = false;
   private loggedEntityDiag: boolean = false;
 
@@ -184,6 +191,9 @@ export class HexBoardRenderer extends Component {
     if (!this.labelTemplate) {
       this.labelTemplate = new TemplateAsset('@Templates/GameplayObjects/TileLabel.hstf');
     }
+    if (!this.ruinTemplate) {
+      this.ruinTemplate = new TemplateAsset('@Templates/GameplayObjects/RuinMarker.hstf');
+    }
 
     console.log('[HexBoardRenderer] Per-kind templates: ' +
       `soldier=${!!this.soldierTemplate} tower=${!!this.towerTemplate} ` +
@@ -202,9 +212,6 @@ export class HexBoardRenderer extends Component {
   /** Toggle visibility of all spawned tiles + markers */
   private setBoardVisible(visible: boolean): void {
     if (visible) {
-      this.lastEntityData = '[]';
-      this.lastEntityCount = -1;
-      this.markersReady = false;
       this.loggedFirstRender = false;
       this.loggedEntityDiag = false;
     }
@@ -220,20 +227,39 @@ export class HexBoardRenderer extends Component {
       if (ent) ent.enabledSelf = visible;
     }
     if (!visible) {
-      this.hideAllMarkers();
+      // Destroy all live + dying markers. Server resets nextEntityId per match,
+      // so retained markers would collide with the next match's ids.
+      this.destroyAllMarkers();
     }
     if (visible) {
       this.lastTileTextKey = '';
     }
   }
 
-  private hideAllMarkers(): void {
-    const allPools = [this.soldierPool, this.towerPool, this.minePool, this.barracksPool, this.basePool];
-    for (const pool of allPools) {
-      for (let i = 0; i < pool.length; i++) {
-        const e = pool[i].entity;
-        if (e) e.enabledSelf = false;
-      }
+  /** Tear down every active and dying marker (called when the board hides). */
+  private destroyAllMarkers(): void {
+    for (const m of this.activeMarkers.values()) {
+      if (m.entity) m.entity.destroy();
+    }
+    this.activeMarkers.clear();
+    for (const m of this.dyingMarkers.values()) {
+      m.entity.destroy();
+    }
+    this.dyingMarkers.clear();
+  }
+
+  /** Template lookup for a server-side kindIdx
+   *  (0=spearman, 1=archer, 2=tower, 3=mine, 4=barracks, 5=base, 6=ruin). */
+  private getTemplateForKind(kindIdx: number): TemplateAsset | null {
+    switch (kindIdx) {
+      case 0:
+      case 1: return this.soldierTemplate || this.markerTemplate || null;
+      case 2: return this.towerTemplate || this.markerTemplate || null;
+      case 3: return this.mineTemplate || this.markerTemplate || null;
+      case 4: return this.barracksTemplate || this.markerTemplate || null;
+      case 5: return this.baseTemplate || this.markerTemplate || null;
+      case 6: return this.ruinTemplate || this.markerTemplate || null;
+      default: return null;
     }
   }
 
@@ -247,71 +273,6 @@ export class HexBoardRenderer extends Component {
     this.spawnIndex = 0;
   }
 
-  private beginMarkerSpawn(): void {
-    // Check if at least one entity template is available
-    const hasAnyTemplate = this.soldierTemplate || this.towerTemplate ||
-      this.mineTemplate || this.barracksTemplate || this.baseTemplate || this.markerTemplate;
-    if (!hasAnyTemplate) {
-      console.log('[HexBoardRenderer] No entity templates assigned - skipping marker spawn');
-      return;
-    }
-    console.log('[HexBoardRenderer] Spawning per-kind entity marker pools...');
-    this.isSpawningMarkers = true;
-    this.markerSpawnPhase = 0;
-    this.markerSpawnIndex = 0;
-    this.totalMarkersSpawned = 0;
-  }
-
-  /** Get template for a specific spawn phase, with fallback to markerTemplate */
-  private getTemplateForPhase(phase: number): TemplateAsset | null {
-    switch (phase) {
-      case 0: return this.soldierTemplate || this.markerTemplate || null;
-      case 1: return this.towerTemplate || this.markerTemplate || null;
-      case 2: return this.mineTemplate || this.markerTemplate || null;
-      case 3: return this.barracksTemplate || this.markerTemplate || null;
-      case 4: return this.baseTemplate || this.markerTemplate || null;
-      default: return null;
-    }
-  }
-
-  /** Get pool size for a specific spawn phase */
-  private getPoolSizeForPhase(phase: number): number {
-    switch (phase) {
-      case 0: return POOL_SIZE_SOLDIER;
-      case 1: return POOL_SIZE_TOWER;
-      case 2: return POOL_SIZE_MINE;
-      case 3: return POOL_SIZE_BARRACKS;
-      case 4: return POOL_SIZE_BASE;
-      default: return 0;
-    }
-  }
-
-  /** Get the pool array for a specific phase */
-  private getPoolForPhase(phase: number): MarkerEntry[] {
-    switch (phase) {
-      case 0: return this.soldierPool;
-      case 1: return this.towerPool;
-      case 2: return this.minePool;
-      case 3: return this.barracksPool;
-      case 4: return this.basePool;
-      default: return [];
-    }
-  }
-
-  /** Map kindIdx to pool */
-  private getPoolForKind(kindIdx: number): MarkerEntry[] {
-    switch (kindIdx) {
-      case 0: // spearman
-      case 1: // archer
-        return this.soldierPool;
-      case 2: return this.towerPool;
-      case 3: return this.minePool;
-      case 4: return this.barracksPool;
-      case 5: return this.basePool;
-      default: return this.soldierPool;
-    }
-  }
-
   @subscribe(OnWorldUpdateEvent, {execution: ExecuteOn.Everywhere})
   onUpdate(payload: OnWorldUpdateEventPayload): void {
     if (NetworkingService.get().isServerContext()) return;
@@ -322,23 +283,19 @@ export class HexBoardRenderer extends Component {
       return;
     }
 
-    // Phase 2: Spawn marker pools
-    if (this.isSpawningMarkers) {
-      this.spawnMarkerBatch();
-      return;
-    }
-
-    // Phase 2.5: Spawn tile text labels (after tiles spawned, sequentially after markers)
+    // Phase 2: Spawn tile text labels (after tiles spawned)
     if (!this.tilesTextReady && this.tilesSpawned) {
       this.spawnTileTextBatch();
       return;
     }
 
-    // Phase 3: Update tile colors and entity markers (only while the board is shown)
+    // Phase 3: Per-frame updates (only while the board is shown). Marker spawn
+    // is now dynamic, driven by updateEntityMarkers on every frame using dt for
+    // the death animation.
     if (this.tilesSpawned && this.boardVisible) {
       this.updateTileColors();
       this.updateTileTexts();
-      this.updateEntityMarkers();
+      this.updateEntityMarkers(payload.deltaTime);
     }
   }
 
@@ -375,63 +332,6 @@ export class HexBoardRenderer extends Component {
       this.isSpawning = false;
       this.tilesSpawned = true;
       console.log('[HexBoardRenderer] All tiles spawned');
-      this.beginMarkerSpawn();
-    }
-  }
-
-  private spawnMarkerBatch(): void {
-    const poolSize = this.getPoolSizeForPhase(this.markerSpawnPhase);
-    const template = this.getTemplateForPhase(this.markerSpawnPhase);
-    const pool = this.getPoolForPhase(this.markerSpawnPhase);
-
-    if (!template) {
-      // Skip this phase, move to next
-      this.markerSpawnPhase++;
-      this.markerSpawnIndex = 0;
-      if (this.markerSpawnPhase > 4) {
-        this.isSpawningMarkers = false;
-        console.log(`[HexBoardRenderer] Marker pools spawned (${this.totalMarkersSpawned} total)`);
-      }
-      return;
-    }
-
-    const endIndex = Math.min(this.markerSpawnIndex + MARKERS_PER_FRAME, poolSize);
-
-    for (let i = this.markerSpawnIndex; i < endIndex; i++) {
-      WorldService.get().spawnTemplate({
-        templateAsset: template,
-        networkMode: NetworkMode.LocalOnly,
-        position: Vec3.zero,
-        rotation: Quaternion.identity,
-        scale: UNIT_SCALE,
-      }).then((ent: Entity) => {
-        ent.enabledSelf = false;
-
-        // Cache color + transform
-        const children = ent.getChildren();
-        let colorComp: ColorComponent | null = null;
-        for (const child of children) {
-          const c = child.getComponent(ColorComponent);
-          if (c) { colorComp = c; break; }
-        }
-        pool.push({
-          entity: ent,
-          color: colorComp,
-          transform: ent.getComponent(TransformComponent),
-        });
-        this.totalMarkersSpawned++;
-      });
-    }
-
-    this.markerSpawnIndex = endIndex;
-
-    if (this.markerSpawnIndex >= poolSize) {
-      this.markerSpawnPhase++;
-      this.markerSpawnIndex = 0;
-      if (this.markerSpawnPhase > 4) {
-        this.isSpawningMarkers = false;
-        console.log(`[HexBoardRenderer] Marker pools spawned (${this.totalMarkersSpawned} total)`);
-      }
     }
   }
 
@@ -484,6 +384,20 @@ export class HexBoardRenderer extends Component {
   private updateTileTexts(): void {
     if (!this.gameManager || !this.tilesTextReady) return;
 
+    // First-frame diagnostic: dump tile-text layer state so we can tell at a
+    // glance whether spawn produced entities + WorldText components.
+    if (!this.diagDumpedTileText) {
+      this.diagDumpedTileText = true;
+      let textCompFound = 0, enabledCount = 0;
+      for (let i = 0; i < this.tileTextEntities.length; i++) {
+        if (this.tileTexts[i]) textCompFound++;
+        const e = this.tileTextEntities[i];
+        if (e && e.enabledSelf) enabledCount++;
+      }
+      console.log(`[HexBoardRenderer DIAG tileText] entities=${this.tileTextEntities.length} ` +
+        `WorldTextFound=${textCompFound} enabledSelf=${enabledCount} boardVisible=${this.boardVisible}`);
+    }
+
     const ownership = this.gameManager.tileOwnership;
     const explored = this.gameManager.playerExplored;
     const buildings = this.gameManager.tileBuildings;
@@ -515,6 +429,7 @@ export class HexBoardRenderer extends Component {
           case '2': textComp.text = 'T'; break; // tower
           case '3': textComp.text = 'M'; break; // mine
           case '4': textComp.text = 'G'; break; // base (G for general/headquarters)
+          case '5': textComp.text = ''; break;  // ruin — 3D ruin marker speaks for itself
           default: textComp.text = '?';
         }
         continue;
@@ -561,7 +476,9 @@ export class HexBoardRenderer extends Component {
       if (!colorComp) continue;
 
       if (explored && explored.length >= TOTAL_TILES && explored[i] !== '1') {
-        if (buildings && buildings[i] !== '0' && buildings[i] !== undefined && ownership[i] === Owner.AI) {
+        // Dim-red tint signals an enemy building visible through fog. Ruins
+        // (char '5') are inert rubble, not a threat — render them as plain fog.
+        if (buildings && buildings[i] !== '0' && buildings[i] !== '5' && buildings[i] !== undefined && ownership[i] === Owner.AI) {
           colorComp.color = COLOR_FOG_ENEMY_BUILDING;
         } else {
           colorComp.color = COLOR_FOG;
@@ -580,48 +497,22 @@ export class HexBoardRenderer extends Component {
     }
   }
 
-  /** Lazy re-fetch a marker's cached ColorComponent if null at spawn time */
-  private refetchMarkerColor(entry: MarkerEntry): ColorComponent | null {
-    if (!entry.entity) return null;
-    const children = entry.entity.getChildren();
-    for (const child of children) {
-      const c = child.getComponent(ColorComponent);
-      if (c) {
-        entry.color = c;
-        return c;
-      }
-    }
-    return null;
-  }
-
-  /** Lazy re-fetch a marker's cached TransformComponent if null at spawn time */
-  private refetchMarkerTransform(entry: MarkerEntry): TransformComponent | null {
-    if (!entry.entity) return null;
-    const t = entry.entity.getComponent(TransformComponent);
-    if (t) {
-      entry.transform = t;
-      return t;
-    }
-    return null;
-  }
-
-  private updateEntityMarkers(): void {
+  /** Per-frame: advance death animations, reconcile active markers with server data, spawn/kill as needed. */
+  private updateEntityMarkers(dt: number): void {
     if (!this.combatManager) return;
 
-    // Wait until marker spawning is complete (isSpawningMarkers goes false when done)
-    if (this.isSpawningMarkers) return;
-
-    if (!this.markersReady) {
-      this.markersReady = true;
-      this.lastEntityData = '[]'; // Force refresh on first render
-      console.log('[HexBoardRenderer] Marker pools ready, rendering entities');
-    }
+    // 1) Advance death animations regardless of server data (they're driven by dt only).
+    this.tickDyingMarkers(dt);
 
     const dataStr = this.combatManager.entityData;
-    if (!dataStr || dataStr.length < 2) return;
+    if (!dataStr || dataStr.length < 2) {
+      // Server has no entities — anything still active should die.
+      if (this.activeMarkers.size > 0) this.killAllActiveMarkers();
+      return;
+    }
 
     // Parse entity data: [[id, kindIdx, sideNum, col, row, hp, hpMax], ...]
-    let entities: number[][] = [];
+    let entities: number[][];
     try {
       entities = JSON.parse(dataStr);
     } catch {
@@ -629,103 +520,188 @@ export class HexBoardRenderer extends Component {
       return;
     }
 
-    // Skip if entity count unchanged and string unchanged
-    if (entities.length === this.lastEntityCount && dataStr === this.lastEntityData) return;
-    this.lastEntityCount = entities.length;
-    this.lastEntityData = dataStr;
-
+    // One-shot diagnostic: log a preview the first time entityData arrives.
     if (!this.loggedEntityDiag) {
       this.loggedEntityDiag = true;
       const preview = entities.slice(0, 3);
       console.log(`[HexBoardRenderer] entityData first 3: ${JSON.stringify(preview)}, total=${entities.length}`);
     }
 
-    // Hide all markers first
-    this.hideAllMarkers();
-
-    // Track per-pool usage index
-    const poolUsage: number[] = [0, 0, 0, 0, 0, 0]; // indexed by kindIdx (0-5)
-
     const explored = this.gameManager ? this.gameManager.playerExplored : '';
+    const seenIds = new Set<number>();
 
+    // 2) Reconcile each server-side entity with the active map.
     for (let i = 0; i < entities.length; i++) {
-      const [id, kindIdx, sideNum, col, row, hp, hpMax] = entities[i];
+      const [id, kindIdx, sideNum, col, row] = entities[i];
+      seenIds.add(id);
 
-      // Fog of war: hide AI UNITS on unexplored tiles
-      if (sideNum === 1 && kindIdx <= 1 && explored && explored.length >= TOTAL_TILES) {
+      let marker = this.activeMarkers.get(id);
+      if (!marker) {
+        marker = this.spawnMarker(id, kindIdx, sideNum, col, row);
+        if (!marker) continue;
+      }
+
+      // Update cached position (used for death-animation start when this marker later dies).
+      const yPos = marker.isBase ? BASE_Y : marker.isUnit ? UNIT_Y : BUILDING_Y;
+      marker.lastCol = col;
+      marker.lastRow = row;
+      marker.lastY = yPos;
+
+      // Fog of war: AI units on unexplored tiles stay hidden, but the marker is retained
+      // (re-revealing the tile re-enables them without a respawn).
+      let visible = true;
+      if (marker.isUnit && sideNum === 1 && explored && explored.length >= TOTAL_TILES) {
         const tIdx = tileIndex(col, row);
-        if (explored[tIdx] !== '1') {
-          continue;
-        }
+        if (explored[tIdx] !== '1') visible = false;
       }
 
-      const pool = this.getPoolForKind(kindIdx);
-      // For soldier pool, both kindIdx 0 and 1 share it; combine usage
-      const usageKey = kindIdx <= 1 ? 0 : kindIdx;
-      const idx = poolUsage[usageKey];
-      if (idx >= pool.length) continue; // pool exhausted
-      poolUsage[usageKey]++;
-
-      const entry = pool[idx];
-      if (!entry || !entry.entity) continue;
-
-      entry.entity.enabledSelf = true;
-
-      // Determine type: unit (0-1), building (2-4), base (5)
-      const isBase = kindIdx === 5;
-      const isUnit = kindIdx <= 1;
-
-      // Position and scale based on type
-      const pos = hexToWorld(col, row);
-      let yPos: number;
-      let scale: Vec3;
-      if (isBase) {
-        yPos = BASE_Y;
-        scale = BASE_SCALE;
-      } else if (isUnit) {
-        yPos = UNIT_Y;
-        scale = UNIT_SCALE;
-      } else {
-        yPos = BUILDING_Y;
-        scale = BUILDING_SCALE;
-      }
-
-      let transform = entry.transform;
-      if (!transform) {
-        transform = this.refetchMarkerTransform(entry);
-      }
-      if (transform) {
-        transform.worldPosition = new Vec3(pos.x, yPos, pos.z);
-        transform.localScale = scale;
-      }
-
-      // Color based on side (player=blue tones, AI=red tones)
-      let colorComp = entry.color;
-      if (!colorComp) {
-        colorComp = this.refetchMarkerColor(entry);
-      }
-      if (colorComp) {
-        if (sideNum === 0) {
-          colorComp.color = isBase ? COLOR_PLAYER_BASE : isUnit ? COLOR_PLAYER_UNIT : COLOR_PLAYER_BUILDING;
-        } else {
-          colorComp.color = isBase ? COLOR_AI_BASE : isUnit ? COLOR_AI_UNIT : COLOR_AI_BUILDING;
+      if (marker.entity) {
+        marker.entity.enabledSelf = visible;
+        if (marker.transform) {
+          const pos = hexToWorld(col, row);
+          marker.transform.worldPosition = new Vec3(pos.x, yPos, pos.z);
         }
       }
     }
 
-    // One-shot diagnostic
-    if (!this.loggedFirstRender && entities.length > 0) {
-      this.loggedFirstRender = true;
-      const baseEntities = entities.filter((e: number[]) => e[1] === 5);
-      console.log(`[HexBoardRenderer] First render: ${entities.length} entities, pools: soldier=${this.soldierPool.length} tower=${this.towerPool.length} mine=${this.minePool.length} barracks=${this.barracksPool.length} base=${this.basePool.length}`);
-      for (const b of baseEntities) {
-        const pos = hexToWorld(b[3], b[4]);
-        console.log(`[HexBoardRenderer] Base: id=${b[0]} side=${b[2] === 0 ? 'Player' : 'AI'} pos=(${pos.x.toFixed(2)}, ${BASE_Y}, ${pos.z.toFixed(2)})`);
+    // 3) Anything in active not seen this frame → start dying. Collect ids
+    // first to avoid mutating the map while iterating.
+    const toKill: number[] = [];
+    for (const id of this.activeMarkers.keys()) {
+      if (!seenIds.has(id)) toKill.push(id);
+    }
+    for (const id of toKill) this.transitionToDying(id);
+
+    // One-shot first-render log
+    if (!this.loggedFirstRender) {
+      if (entities.length > 0) {
+        this.loggedFirstRender = true;
+        const baseEntities = entities.filter((e: number[]) => e[1] === 5);
+        console.log(`[HexBoardRenderer] First render: ${entities.length} entities (dynamic spawn)`);
+        for (const b of baseEntities) {
+          const pos = hexToWorld(b[3], b[4]);
+          console.log(`[HexBoardRenderer] Base: id=${b[0]} side=${b[2] === 0 ? 'Player' : 'AI'} pos=(${pos.x.toFixed(2)}, ${BASE_Y}, ${pos.z.toFixed(2)})`);
+        }
       }
-    } else if (!this.loggedFirstRender && entities.length === 0) {
-      this.loggedFirstRender = true;
-      console.log('[HexBoardRenderer] First update: no entities yet (combat may not have started)');
     }
   }
 
+  /** Request a marker spawn for a server entity id; returns the (initially unfilled) ActiveMarker. */
+  private spawnMarker(id: number, kindIdx: number, sideNum: number, col: number, row: number): ActiveMarker | null {
+    const template = this.getTemplateForKind(kindIdx);
+    if (!template) return null;
+
+    const isBase = kindIdx === 5;
+    const isUnit = kindIdx <= 1;
+    const yPos = isBase ? BASE_Y : isUnit ? UNIT_Y : BUILDING_Y;
+    const scale = isBase ? BASE_SCALE : isUnit ? UNIT_SCALE : BUILDING_SCALE;
+    const pos = hexToWorld(col, row);
+    const [r, g, b] = this.colorForKind(sideNum, kindIdx);
+
+    // Insert placeholder immediately so subsequent frames see this id as active.
+    const marker: ActiveMarker = {
+      entity: null, color: null, transform: null,
+      kindIdx, sideNum, isBase, isUnit,
+      baseR: r, baseG: g, baseB: b,
+      lastCol: col, lastRow: row, lastY: yPos,
+    };
+    this.activeMarkers.set(id, marker);
+
+    WorldService.get().spawnTemplate({
+      templateAsset: template,
+      networkMode: NetworkMode.LocalOnly,
+      position: new Vec3(pos.x, yPos, pos.z),
+      rotation: Quaternion.identity,
+      scale: scale,
+    }).then((ent: Entity) => {
+      // If the entity already died before the spawn resolved, destroy the orphan.
+      if (this.activeMarkers.get(id) !== marker) {
+        ent.destroy();
+        return;
+      }
+      marker.entity = ent;
+      marker.transform = ent.getComponent(TransformComponent);
+      const children = ent.getChildren();
+      for (const child of children) {
+        const c = child.getComponent(ColorComponent);
+        if (c) { marker.color = c; break; }
+      }
+      if (marker.color) {
+        marker.color.color = new Color(r, g, b, 1.0);
+      }
+      if (marker.transform) {
+        marker.transform.localScale = scale;
+      }
+    });
+
+    return marker;
+  }
+
+  /** Static base rgb per (side, kindIdx). Mirrors the legacy COLOR_* constants. */
+  private colorForKind(sideNum: number, kindIdx: number): [number, number, number] {
+    // Ruins are side-tinted but desaturated, so they read as "abandoned".
+    if (kindIdx === 6) {
+      return sideNum === 0 ? [0.4, 0.4, 0.5] : [0.5, 0.4, 0.4];
+    }
+    const isBase = kindIdx === 5;
+    const isUnit = kindIdx <= 1;
+    if (sideNum === 0) {
+      if (isBase) return [1.0, 1.0, 1.0];
+      if (isUnit) return [0.2, 0.6, 1.0];
+      return [0.0, 0.7, 0.9];
+    }
+    if (isBase) return [1.0, 0.1, 0.1];
+    if (isUnit) return [1.0, 0.2, 0.2];
+    return [1.0, 0.5, 0.1];
+  }
+
+  /** Move a marker from active → dying, capturing start position for the sink animation. */
+  private transitionToDying(id: number): void {
+    const m = this.activeMarkers.get(id);
+    if (!m) return;
+    this.activeMarkers.delete(id);
+    if (!m.entity) {
+      // Spawn never resolved; the .then will see the missing-from-active sentinel and destroy.
+      return;
+    }
+    const pos = hexToWorld(m.lastCol, m.lastRow);
+    this.dyingMarkers.set(id, {
+      entity: m.entity, color: m.color, transform: m.transform,
+      elapsedMs: 0,
+      startX: pos.x, startY: m.lastY, startZ: pos.z,
+      baseR: m.baseR, baseG: m.baseG, baseB: m.baseB,
+    });
+  }
+
+  /** Drive death animations: sink + alpha fade; destroy when t >= 1. */
+  private tickDyingMarkers(dt: number): void {
+    if (this.dyingMarkers.size === 0) return;
+    const finished: number[] = [];
+    for (const [id, m] of this.dyingMarkers) {
+      m.elapsedMs += dt * 1000;
+      if (m.elapsedMs >= DEATH_DURATION_MS) {
+        finished.push(id);
+        continue;
+      }
+      const t = m.elapsedMs / DEATH_DURATION_MS;
+      if (m.transform) {
+        m.transform.worldPosition = new Vec3(m.startX, m.startY - DEATH_SINK_DISTANCE * t, m.startZ);
+      }
+      if (m.color) {
+        m.color.color = new Color(m.baseR, m.baseG, m.baseB, 1.0 - t);
+      }
+    }
+    for (const id of finished) {
+      const m = this.dyingMarkers.get(id);
+      if (m) m.entity.destroy();
+      this.dyingMarkers.delete(id);
+    }
+  }
+
+  /** Move every active marker into the dying set (used when entityData empties out). */
+  private killAllActiveMarkers(): void {
+    const ids: number[] = [];
+    for (const id of this.activeMarkers.keys()) ids.push(id);
+    for (const id of ids) this.transitionToDying(id);
+  }
 }

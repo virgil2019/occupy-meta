@@ -69,8 +69,8 @@ export const MATCH_DURATION_MS = 180000; // 3 minutes
 
 // Unit stats: [hp, atk, range, moveSpeed (tiles/sec), attackSpeed (atk/sec)]
 export const UNIT_STATS: Record<string, {hp: number; atk: number; range: number; moveSpeed: number; attackSpeed: number}> = {
-  spearman: {hp: 50, atk: 8, range: 1, moveSpeed: 1.5, attackSpeed: 1.0},
-  archer: {hp: 30, atk: 6, range: 3, moveSpeed: 1.2, attackSpeed: 1.0},
+  spearman: {hp: 50, atk: 8, range: 1, moveSpeed: 1.0, attackSpeed: 1.0},
+  archer: {hp: 30, atk: 6, range: 3, moveSpeed: 0.8, attackSpeed: 1.0},
   tower: {hp: 80, atk: 12, range: 4, moveSpeed: 0, attackSpeed: 0.7},
   mine: {hp: 40, atk: 0, range: 0, moveSpeed: 0, attackSpeed: 0},
   barracks: {hp: 100, atk: 0, range: 0, moveSpeed: 0, attackSpeed: 0},

@@ -190,9 +190,13 @@ export class HexBoardRenderer extends Component {
     if (!this.labelTemplate) {
       this.labelTemplate = new TemplateAsset('@Templates/GameplayObjects/TileLabel.hstf');
     }
-    if (!this.ruinTemplate) {
-      this.ruinTemplate = new TemplateAsset('@Templates/GameplayObjects/RuinMarker.hstf');
-    }
+    // ruinTemplate is intentionally NOT hardcoded — RuinMarker.hstf doesn't
+    // exist yet, and `new TemplateAsset(path)` validates the path at
+    // construction time (throws if missing), which would crash onStart and
+    // leave the whole board un-spawned. getTemplateForKind(6) falls back to
+    // markerTemplate, so ruins still render (just sharing the marker visual)
+    // until you create RuinMarker.hstf in the editor and bind it via the
+    // ruinTemplate @property.
 
     console.log('[HexBoardRenderer] Per-kind templates: ' +
       `soldier=${!!this.soldierTemplate} tower=${!!this.towerTemplate} ` +

@@ -388,7 +388,21 @@ export class HexBoardRenderer extends Component {
     }
   }
 
+  private diagDumpedTileText: boolean = false; // TEMP
+
   private updateTileTexts(): void {
+    // TEMP diagnostic — dump tile-text layer state on first frame here.
+    if (this.tilesTextReady && !this.diagDumpedTileText) {
+      this.diagDumpedTileText = true;
+      let textCompFound = 0, enabledCount = 0;
+      for (let i = 0; i < this.tileTextEntities.length; i++) {
+        if (this.tileTexts[i]) textCompFound++;
+        const e = this.tileTextEntities[i];
+        if (e && e.enabledSelf) enabledCount++;
+      }
+      console.log(`[HexBoardRenderer DIAG tileText] entities=${this.tileTextEntities.length} WorldTextFound=${textCompFound} enabledSelf=${enabledCount} tilesTextReady=${this.tilesTextReady} boardVisible=${this.boardVisible}`);
+    }
+
     if (!this.gameManager || !this.tilesTextReady) return;
 
     const ownership = this.gameManager.tileOwnership;

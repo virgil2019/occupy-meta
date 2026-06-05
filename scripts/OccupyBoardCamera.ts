@@ -1,6 +1,7 @@
 /**
- * OccupyBoardCamera - Fixed top-down camera for the hex board.
- * Positioned above board center looking straight down.
+ * OccupyBoardCamera - Fixed angled camera for the hex board.
+ * Positioned above and slightly south of board center, tilted down so the
+ * board has a perspective (near-large/far-small) look instead of pure top-down.
  * Only activates when game state enters Playing.
  *
  * Component Attachment: Scene entity in space.hstf (dedicated camera entity)
@@ -33,9 +34,17 @@ import {
 
 @component()
 export class OccupyBoardCamera extends Component {
-  /** Height above the board center */
+  /** Height (Y) of the camera above world Y=0. */
   @property()
-  cameraHeight: number = 14;
+  cameraHeight: number = 10;
+
+  /** Z offset behind the board center (camera sits at +Z, looks toward -Z and -Y). */
+  @property()
+  cameraOffsetZ: number = 8;
+
+  /** Tilt angle in degrees from horizontal. 90 = pure top-down, 45 = 3/4 view. */
+  @property()
+  cameraTiltDegrees: number = 45;
 
   private cameraActivated: boolean = false;
 
@@ -63,10 +72,12 @@ export class OccupyBoardCamera extends Component {
 
     const transform = this.entity.getComponent(TransformComponent);
     if (transform) {
-      // Position above board center
-      transform.worldPosition = new Vec3(0, this.cameraHeight, 0);
-      // Look straight down: rotate -90 around X axis
-      transform.worldRotation = Quaternion.fromEuler(new Vec3(-90, 0, 0));
+      // Position: above board center, offset +Z (south of center under the
+      // tile coordinate system — low rows / player side maps to +Z).
+      transform.worldPosition = new Vec3(0, this.cameraHeight, this.cameraOffsetZ);
+      // Rotation: tilt down by cameraTiltDegrees. -X rotation pitches the
+      // camera's +Z view direction toward -Y (looking down at the board).
+      transform.worldRotation = Quaternion.fromEuler(new Vec3(-this.cameraTiltDegrees, 0, 0));
     }
 
     const cameraComponent = this.entity.getComponent(CameraComponent);

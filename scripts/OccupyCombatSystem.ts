@@ -251,7 +251,11 @@ export class OccupyCombatSystem extends Component {
     for (const ent of this.entities.values()) {
       if (ent.interpT >= 1.0) continue;
       // Move visual position toward target
-      ent.interpT = Math.min(1.0, ent.interpT + dt * 4.0); // 0.25s to complete
+      // Visual interpolation rate tied to moveSpeed so the lerp takes exactly
+      // 1/moveSpeed seconds — same as the move cooldown — making motion
+      // continuous tile-to-tile instead of "jump, pause, jump, pause".
+      const rate = ent.moveSpeed > 0 ? ent.moveSpeed : 4.0;
+      ent.interpT = Math.min(1.0, ent.interpT + dt * rate);
       if (ent.interpT >= 1.0) {
         ent.visualCol = ent.col;
         ent.visualRow = ent.row;

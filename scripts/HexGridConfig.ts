@@ -28,7 +28,6 @@ export enum TileType {
   Mine = 'M',
   Mystery = '?',
   Base = '#',
-  BaseNeighbor = '~',
 }
 
 // ─── Building Types ───────────────────────────────────────────────────────────
@@ -57,7 +56,6 @@ export const BASE_COIN_INTERVAL = 3.0;  // seconds
 export const MINE_COIN_RATE = 10;       // coins per tick
 export const MINE_COIN_INTERVAL = 2.0;  // seconds
 export const BUILD_COST_NORMAL = 50;
-export const BUILD_COST_NEIGHBOR = 25;
 
 // ─── HP Constants ─────────────────────────────────────────────────────────────
 export const BASE_HP = 500;
@@ -71,8 +69,8 @@ export const MATCH_DURATION_MS = 180000; // 3 minutes
 
 // Unit stats: [hp, atk, range, moveSpeed (tiles/sec), attackSpeed (atk/sec)]
 export const UNIT_STATS: Record<string, {hp: number; atk: number; range: number; moveSpeed: number; attackSpeed: number}> = {
-  spearman: {hp: 50, atk: 8, range: 1, moveSpeed: 1.5, attackSpeed: 1.0},
-  archer: {hp: 30, atk: 6, range: 3, moveSpeed: 1.2, attackSpeed: 1.0},
+  spearman: {hp: 50, atk: 8, range: 1, moveSpeed: 1.0, attackSpeed: 1.0},
+  archer: {hp: 30, atk: 6, range: 3, moveSpeed: 0.8, attackSpeed: 1.0},
   tower: {hp: 80, atk: 12, range: 4, moveSpeed: 0, attackSpeed: 0.7},
   mine: {hp: 40, atk: 0, range: 0, moveSpeed: 0, attackSpeed: 0},
   barracks: {hp: 100, atk: 0, range: 0, moveSpeed: 0, attackSpeed: 0},
@@ -114,19 +112,22 @@ export const AI_BASE_ROW = 10;
 
 // ─── Map Layout (12 rows × 9 cols, row 0 = bottom) ───────────────────────────
 // Each string is 9 characters representing tile types for that row
+// Only '#' (base) is positional; every other character is overwritten with a
+// randomly-rolled tile type in initializeGameState. The non-'#' letters here
+// are just placeholders to keep the layout readable.
 const MAP_LAYOUT: readonly string[] = [
-  'BMBT~~BTM', // Row 0 (bottom)
-  'BMT~#~BMB', // Row 1 (player base)
-  'TBM~~BMBT', // Row 2 (note: originally "TBM B~~BMT" but map shows ~ at cols 3,4 for row 2)
+  'BMBTBBBTM', // Row 0 (bottom)
+  'BMTB#BBMB', // Row 1 (player base)
+  'TBMBBBMBT', // Row 2
   'BBTMBBMTB', // Row 3
   'MBTBBBTMB', // Row 4
   'BTBMBMBTB', // Row 5
   'BTBMBMBTB', // Row 6
   'MBTBBBTMB', // Row 7
   'BBTMBBMTB', // Row 8
-  'TBM~~BMBT', // Row 9
-  'BMT~#~BMB', // Row 10 (AI base)
-  'BMT~~BTMB', // Row 11 (top)
+  'TBMBBBMBT', // Row 9
+  'BMTB#BBMB', // Row 10 (AI base)
+  'BMTBBBTMB', // Row 11 (top)
 ];
 
 /**
@@ -232,31 +233,23 @@ export function getInitialOwner(row: number): Owner {
  */
 export function getBuildingTypeForTile(tileChar: string): BuildingType {
   switch (tileChar) {
-    case TileType.Barracks:
-    case TileType.BaseNeighbor:
-      return BuildingType.Barracks;
-    case TileType.Tower:
-      return BuildingType.Tower;
-    case TileType.Mine:
-      return BuildingType.Mine;
-    case TileType.Base:
-      return BuildingType.Base;
-    case TileType.Mystery:
-      // Mystery tiles resolved at build time; default mapping is Barracks
-      return BuildingType.Barracks;
-    default:
-      return BuildingType.Barracks;
+    case TileType.Barracks: return BuildingType.Barracks;
+    case TileType.Tower: return BuildingType.Tower;
+    case TileType.Mine: return BuildingType.Mine;
+    case TileType.Base: return BuildingType.Base;
+    // Mystery tiles resolved at build time; default mapping is Barracks
+    case TileType.Mystery: return BuildingType.Barracks;
+    default: return BuildingType.Barracks;
   }
 }
 
 /** Cost for Mystery tile */
-export const BUILD_COST_MYSTERY = 30;
+export const BUILD_COST_MYSTERY = 25;
 
 /**
  * Get build cost for a tile
  */
 export function getBuildCost(tileChar: string): number {
-  if (tileChar === TileType.BaseNeighbor) return BUILD_COST_NEIGHBOR;
   if (tileChar === TileType.Mystery) return BUILD_COST_MYSTERY;
   return BUILD_COST_NORMAL;
 }

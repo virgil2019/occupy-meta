@@ -22,6 +22,7 @@ import type {Entity, Maybe, OnWorldUpdateEventPayload} from 'meta/worlds';
 
 import {
   TOTAL_TILES,
+  getBuildCost,
   hexToWorld,
   indexToColRow,
   Owner,
@@ -209,8 +210,12 @@ export class HexBoardRenderer extends Component {
   onGameStateChanged(payload: GameStateChangedLocalPayload): void {
     if (NetworkingService.get().isServerContext()) return;
     const show = payload.newState === GameState.Playing || payload.newState === GameState.GameOver;
+    console.log(`[HexBoardRenderer DIAG] onGameStateChanged newState=${payload.newState} show=${show} tilesSpawned=${this.tilesSpawned} tileEntities.length=${this.tileEntities.length}`);
     this.boardVisible = show;
     this.setBoardVisible(show);
+    let aliveCount = 0;
+    for (let i = 0; i < this.tileEntities.length; i++) if (this.tileEntities[i]) aliveCount++;
+    console.log(`[HexBoardRenderer DIAG] after setBoardVisible(${show}): aliveTileEntities=${aliveCount}/${this.tileEntities.length}`);
   }
 
   /** Toggle visibility of all spawned tiles + markers */
@@ -385,7 +390,21 @@ export class HexBoardRenderer extends Component {
     }
   }
 
+  private diagDumpedTileText: boolean = false; // TEMP
+
   private updateTileTexts(): void {
+    // TEMP diagnostic — dump tile-text layer state on first frame here.
+    if (this.tilesTextReady && !this.diagDumpedTileText) {
+      this.diagDumpedTileText = true;
+      let textCompFound = 0, enabledCount = 0;
+      for (let i = 0; i < this.tileTextEntities.length; i++) {
+        if (this.tileTexts[i]) textCompFound++;
+        const e = this.tileTextEntities[i];
+        if (e && e.enabledSelf) enabledCount++;
+      }
+      console.log(`[HexBoardRenderer DIAG tileText] entities=${this.tileTextEntities.length} WorldTextFound=${textCompFound} enabledSelf=${enabledCount} tilesTextReady=${this.tilesTextReady} boardVisible=${this.boardVisible}`);
+    }
+
     if (!this.gameManager || !this.tilesTextReady) return;
 
     // First-frame diagnostic: dump tile-text layer state so we can tell at a
@@ -426,31 +445,26 @@ export class HexBoardRenderer extends Component {
       }
 
       const buildingChar = buildings[i];
-      // If tile has a building, show its type letter
+      // If a building or ruin is present, leave the text empty — the 3D
+      // marker on top speaks for the tile by itself.
       if (buildingChar !== '0' && buildingChar !== undefined) {
-        switch (buildingChar) {
-          case '1': textComp.text = 'B'; break; // barracks
-          case '2': textComp.text = 'T'; break; // tower
-          case '3': textComp.text = 'M'; break; // mine
-          case '4': textComp.text = 'G'; break; // base (G for general/headquarters)
-          case '5': textComp.text = ''; break;  // ruin — 3D ruin marker speaks for itself
-          default: textComp.text = '?';
-        }
+        textComp.text = '';
         continue;
       }
 
-      // Empty explored tile - show tile type letter from runtime random assignment
+      // Empty buildable tile: letter on first line, cost on second.
+      // Base ('#') and resolved-empty mystery ('E', an owned plot) show nothing.
       const tileChar = tileTypes[i];
+      let symbol = '';
       switch (tileChar) {
-        case 'B': textComp.text = 'B'; break;
-        case 'T': textComp.text = 'T'; break;
-        case 'M': textComp.text = 'M'; break;
-        case '?': textComp.text = '?'; break;
-        case '#': textComp.text = 'G'; break;
-        case '~': textComp.text = '~'; break;
-        case 'E': textComp.text = ''; break; // Resolved empty mystery tile
-        default: textComp.text = '';
+        case 'B': symbol = 'B'; break;
+        case 'T': symbol = 'T'; break;
+        case 'M': symbol = 'M'; break;
+        case '?': symbol = '?'; break;
+        // '#' base + 'E' resolved-empty mystery: no label
+        default: symbol = '';
       }
+      textComp.text = symbol ? `${symbol}\n${getBuildCost(tileChar)}` : '';
     }
   }
 
